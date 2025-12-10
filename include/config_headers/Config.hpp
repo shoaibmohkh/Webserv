@@ -54,10 +54,11 @@ class ServerConfig {
         int                                      client_Max_Body_Size; // Max body size (1000000)
         std::string                              root;                 // Document root (./www)
         std::string                              index;                // Index file (index.html)
+        std::string                              server_name;          // Server name (mysite)
         std::map<int, std::string>               error_Pages;          // Error pages (404, /errors/404.html)
         std::vector<LocationConfig>              locations;            // Location configurations
 
-        ServerConfig() : port(80), client_Max_Body_Size(0), root("./www"), index("index.html") {}
+        ServerConfig() : port(80), client_Max_Body_Size(0), root("./www"), index("index.html"), server_name("default") {}
 };
 
 // server {
