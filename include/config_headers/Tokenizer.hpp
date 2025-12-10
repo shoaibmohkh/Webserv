@@ -35,9 +35,7 @@ class Tokenizer {
         std::string             _input;
         int                     _pos;
         int                     _line;
-
         void                    skip_sp(int &_pos);
-
 
     public:
         Tokenizer(const std::string& input);
