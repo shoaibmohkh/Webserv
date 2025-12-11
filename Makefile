@@ -1,5 +1,5 @@
 NAME = webserv
-SRCS = src/config/testfile.cpp src/config/Tokenizer.cpp src/config/parser.cpp
+SRCS = src/testfile.cpp src/config/Tokenizer.cpp src/config/parser.cpp src/Router/Router.cpp
 OBJS = $(SRCS:.cpp=.o)
 CXX = c++
 CXXFLAGS = -Wall -Werror -Wextra --std=c++98
