@@ -34,6 +34,18 @@ void Parser::error_msg(int num)
         std::cerr << "Syntax Error at line in Configfile" << _tokens[_pos].line << std::endl;
 }
 
+void Parser::skip_directive(int &_pos)
+{
+    while (_pos < static_cast<int>(_tokens.size()) 
+           && _tokens[_pos].type != SEMICOLON 
+           && _tokens[_pos].type != R_BRACE)
+    {
+        _pos++;
+    }
+    if (_pos < static_cast<int>(_tokens.size()) && _tokens[_pos].type == SEMICOLON)
+        _pos++;
+}
+
 int Parser::uploadEnable_and_autoindex_parse(int &_pos, LocationConfig &locConfig)
 {
     if (_pos + 1 >= (int)_tokens.size())
@@ -104,6 +116,62 @@ int Parser::root_index_parse(int &_pos, ServerConfig &serverConfig)
     }
     return 1;
     
+}
+
+int Parser::location_root_parse(int &_pos, LocationConfig &locConfig)
+{
+    if (_pos + 1 >= (int)_tokens.size())
+    {
+        error_msg(4);
+        return 0;
+    }
+    _pos++;
+    if (_tokens[_pos].type == WORD)
+    {
+        locConfig.root = _tokens[_pos].value;
+        _pos++;
+        if (_tokens[_pos].type == SEMICOLON)
+            _pos++;
+        else
+        {
+            error_msg(2);
+            return 0;
+        }
+    }
+    else
+    {
+        error_msg(4);
+        return 0;
+    }
+    return 1;
+}
+
+int Parser::server_name_parse(int &_pos, ServerConfig &serverConfig)
+{
+    if (_pos + 1 >= (int)_tokens.size())
+    {
+        error_msg(4);
+        return 0;
+    }
+    _pos++;
+    if (_tokens[_pos].type == WORD)
+    {
+        serverConfig.server_name = _tokens[_pos].value;
+        _pos++;
+        if (_tokens[_pos].type == SEMICOLON)
+            _pos++;
+        else
+        {
+            error_msg(2);
+            return 0;
+        }
+    }
+    else
+    {
+        error_msg(4);
+        return 0;
+    }
+    return 1;
 }
 
 int Parser::upload_parse(int &_pos, LocationConfig &locConfig)
@@ -366,12 +434,18 @@ LocationConfig Parser::location_parse(int &_pos)
             if (!cgi_extension_parse(_pos, locConfig))
                 return locConfig;
         }
+        else if (key == "root")
+        {
+            if (!location_root_parse(_pos, locConfig))
+                return locConfig;
+        }
         else
         {
-            error_msg(4);
-            return locConfig;
+            std::cerr << "Warning: Unknown location directive '" << key 
+                      << "' at line " << _tokens[_pos].line << ", skipping..." << std::endl;
+            skip_directive(_pos);
         }
-        if (_tokens[_pos].type == R_BRACE)
+        if (_pos < (int)_tokens.size() && _tokens[_pos].type == R_BRACE)
             break;
     }
     if (_pos >= (int)_tokens.size() || _tokens[_pos].type != R_BRACE)
@@ -400,41 +474,47 @@ ServerConfig Parser::server_parse(int &_pos)
     {
         if (_tokens[_pos].type != WORD)
         {
-            error_msg(3);
-            return serverConfig;
+            error_msg(4);
+            skip_directive(_pos);
+            continue;
         }
 
         const std::string &key = _tokens[_pos].value;
+
         if (key == "location")
         {
             _pos++;
             LocationConfig loc = location_parse(_pos);
             serverConfig.locations.push_back(loc);
-            if (_tokens[_pos].type == R_BRACE)
-                continue ;
+            continue;
         }
         else if (key == "listen" || key == "client_max_body_size")
         {
             if (!port_and_clientMaxBodySize_parse(_pos, serverConfig))
-                return serverConfig;
+                skip_directive(_pos);
         }
         else if (key == "root" || key == "index")
         {
             if (!root_index_parse(_pos, serverConfig))
-                return serverConfig;
+                skip_directive(_pos);
+        }
+        else if (key == "server_name")
+        {
+            if (!server_name_parse(_pos, serverConfig))
+                skip_directive(_pos);
         }
         else if (key == "error_page")
         {
             if (!error_page_parse(_pos, serverConfig))
-                return serverConfig;
+                skip_directive(_pos);
         }
         else
         {
-            error_msg(3);
-            return serverConfig;
+            std::cerr << "Warning: Unknown server directive '" << key
+                      << "' at line " << _tokens[_pos].line
+                      << ", skipping...\n";
+            skip_directive(_pos);
         }
-        if (_tokens[_pos].type == R_BRACE)
-            break;
     }
 
     if (_pos >= (int)_tokens.size() || _tokens[_pos].type != R_BRACE)
@@ -442,10 +522,11 @@ ServerConfig Parser::server_parse(int &_pos)
         error_msg(3);
         return serverConfig;
     }
-    _pos++;
 
+    _pos++;
     return serverConfig;
 }
+
 
 
 Config    Parser::parse()
