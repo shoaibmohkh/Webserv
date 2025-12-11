@@ -34,10 +34,10 @@ class LocationConfig {
         std::string                        path;              // Location path (/images)
         std::string                        returnPath;        // redirect path (/new_images)
         std::string                        uploadStore;       // Upload storage path (/var/www/uploads)
+        std::string                        root;              // Root for this location 
         std::vector<std::string>           allowMethods;      // Allowed methods (GET, POST, DELETE)
         std::map<std::string, std::string> cgiExtensions;     // CGI (.py, /usr/bin/python3)
 
-        std::string                        root;              // Root for this location 
         LocationConfig() : returnCode(0), uploadEnable(false), autoindex(false) {}
 };
 
