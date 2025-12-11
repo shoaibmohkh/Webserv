@@ -37,10 +37,12 @@ class LocationConfig {
         std::vector<std::string>           allowMethods;      // Allowed methods (GET, POST, DELETE)
         std::map<std::string, std::string> cgiExtensions;     // CGI (.py, /usr/bin/python3)
 
+        std::string                        root;              // Root for this location 
         LocationConfig() : returnCode(0), uploadEnable(false), autoindex(false) {}
 };
 
 // server {
+//     server_name mysite;
 //     listen 8080;
 //     root ./www;
 //     index index.html;
