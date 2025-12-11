@@ -18,6 +18,7 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
+#include <cerrno>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -30,6 +31,7 @@ class Router
         Router(const Config& config);
         ~Router();
         HTTPResponse             handle_route_Request(const HTTPRequest& request) const;
+        HTTPResponse             apply_error_page(const ServerConfig& server_config, int status_code, HTTPResponse response) const;
     private:
         const Config&            _config;
         const ServerConfig       &find_server_config(const HTTPRequest& request) const;
@@ -45,6 +47,8 @@ class Router
         HTTPResponse             handle_cgi_request(const HTTPRequest& request, const std::string& fullpath, const LocationConfig& location_config) const;
         HTTPResponse             serve_static_file(const std::string& fullpath) const;
         HTTPResponse             parse_cgi_response(const std::string& cgi_output) const;
+        HTTPResponse             handle_post_request(const HTTPRequest& request, const LocationConfig& location_config, const ServerConfig& server_config, const std::string& fullpath) const;
+        HTTPResponse             handle_delete_request(const std::string& fullpath) const;
         std::vector<std::string> build_cgi_environment(const HTTPRequest& request, const std::string& fullpath) const;
 };
 
