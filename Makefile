@@ -10,6 +10,7 @@ SRCS = src/testfile.cpp \
 	   src/Router/files_handeling.cpp \
 	   src/Router/cgi_router.cpp \
 	   src/Router/autoindex.cpp \
+	   src/Router/error_page.cpp \
 
 OBJS = $(SRCS:.cpp=.o)
 CXX = c++
