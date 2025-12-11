@@ -16,32 +16,26 @@ std::string Router::final_path(const ServerConfig& server,
                                const LocationConfig& location,
                                const std::string& uri) const
 {
+    std::string root = server.root;
     std::string loc = location.path;
-    std::string root = location.root.empty() ? server.root : location.root;
-    std::string remaining;
 
-    if (loc == "/")
-    {
-        remaining = uri;
-    }
-    else if (uri.compare(0, loc.length(), loc) == 0)
-    {
-        remaining = uri.substr(loc.length());
-        if (remaining.empty())
-            remaining = "/";
-    }
-    else
-        remaining = uri;
-    if (!root.empty() && root[root.length() - 1] != '/')
+    if (!root.empty() && root[root.size() - 1] != '/')
         root += "/";
-    if (!remaining.empty() && remaining[0] == '/')
-        remaining = remaining.substr(1);
-    std::string full = root + remaining;
-    for (size_t pos = full.find("//"); pos != std::string::npos; pos = full.find("//"))
-        full.erase(pos, 1);
+    std::string clean_loc = loc;
+    if (clean_loc.size() > 0 && clean_loc[0] == '/')
+        clean_loc.erase(0,1);
+    if (!clean_loc.empty() && clean_loc[clean_loc.size() - 1] != '/')
+        clean_loc += "/";
+    std::string remaining = uri.substr(loc.size());
+    if (remaining.size() > 0 && remaining[0] == '/')
+        remaining.erase(0,1);
+    std::string full = root + clean_loc + remaining;
+    while (full.find("//") != std::string::npos)
+        full.erase(full.find("//"), 1);
 
     return full;
 }
+
 
 std::string Router::to_string(int value) const
 {

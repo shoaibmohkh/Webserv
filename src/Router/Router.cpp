@@ -24,122 +24,151 @@ Router::~Router()
 
 HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
 {
+    HTTPResponse response;
     if (_config.servers.empty())
     {
-        HTTPResponse response;
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
         response.body = "500 Internal Server Error: No server configurations available.";
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return response;
+
+        return apply_error_page(_config.servers[0], response.status_code, response);
     }
 
     const ServerConfig &server_config = find_server_config(request);
     const LocationConfig* location_config = find_location_config(request.uri, server_config);
     if (!location_config)
     {
-        HTTPResponse response;
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.body = "404 Not Found";
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return response;
+
+        return apply_error_page(server_config, response.status_code, response);
     }
     if (!is_method_allowed(*location_config, request.method))
     {
-        HTTPResponse response;
         response.status_code = 405;
         response.reason_phrase = "Method Not Allowed";
-        
+
         std::string allowed_methods;
         if (location_config->allowMethods.empty())
             allowed_methods = "GET, POST, DELETE";
         else
         {
-            for (std::vector<std::string>::size_type i = 0; i < location_config->allowMethods.size(); ++i)
+            for (size_t i = 0; i < location_config->allowMethods.size(); ++i)
             {
                 allowed_methods += location_config->allowMethods[i];
-                if (i + 1 != location_config->allowMethods.size())
+                if (i + 1 < location_config->allowMethods.size())
                     allowed_methods += ", ";
             }
         }
         response.headers["Allow"] = allowed_methods;
+
         response.body = "405 Method Not Allowed";
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
-        return response;
+        return apply_error_page(server_config, response.status_code, response);
     }
     if (location_config->returnCode != 0)
     {
-        HTTPResponse response;
         response.status_code = location_config->returnCode;
         response.reason_phrase = "Redirect";
         response.headers["Location"] = location_config->returnPath;
         response.body = "Redirecting to " + location_config->returnPath;
         response.headers["Content-Length"] = to_string(response.body.size());
-    
-        return response;
+
+        return apply_error_page(server_config, response.status_code, response);
     }
     std::string fullpath = final_path(server_config, *location_config, request.uri);
+
     struct stat sb;
+    if (request.method == HTTP_POST)
+    {
+        response = handle_post_request(request, *location_config, server_config, fullpath);
+        return apply_error_page(server_config, response.status_code, response);
+    }
     if (stat(fullpath.c_str(), &sb) != 0)
     {
-        HTTPResponse response;
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.body = "404 Not Found";
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return response;
+
+        return apply_error_page(server_config, response.status_code, response);
     }
+
     if (S_ISDIR(sb.st_mode))
     {
         if (location_config->autoindex == true)
-            return generate_autoindex_response(fullpath);
+        {
+            response = generate_autoindex_response(fullpath);
+            return apply_error_page(server_config, response.status_code, response);
+        }
         if (!server_config.index.empty())
         {
             std::string index_path = fullpath;
             if (index_path[index_path.size() - 1] != '/')
                 index_path += "/";
             index_path += server_config.index;
+
             struct stat sb_index;
             if (stat(index_path.c_str(), &sb_index) == 0 && S_ISREG(sb_index.st_mode))
             {
-                return serve_static_file(index_path);
+                response = serve_static_file(index_path);
+                return apply_error_page(server_config, response.status_code, response);
             }
-            HTTPResponse response;
+
             response.status_code = 403;
             response.reason_phrase = "Forbidden";
             response.body = "403 Forbidden";
             response.headers["Content-Length"] = to_string(response.body.size());
             response.headers["Content-Type"] = "text/plain";
-            return response;
+
+            return apply_error_page(server_config, response.status_code, response);
         }
-        HTTPResponse response;
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
         response.body = "403 Forbidden";
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return response;
+
+        return apply_error_page(server_config, response.status_code, response);
     }
     if (S_ISREG(sb.st_mode))
     {
         if (is_cgi_request(*location_config, fullpath))
-            return handle_cgi_request(request, fullpath, *location_config);
+        {
+            response = handle_cgi_request(request, fullpath, *location_config);
+            return apply_error_page(server_config, response.status_code, response);
+        }
         else
-            return serve_static_file(fullpath);
+        {
+            response = serve_static_file(fullpath);
+            return apply_error_page(server_config, response.status_code, response);
+        }
     }
-    HTTPResponse temp;
-    temp.status_code = 501;
-    temp.reason_phrase = "Not Implemented";
-    temp.body = "Router logic not completed yet.\n";
-    temp.headers["Content-Type"] = "text/plain";
-    temp.headers["Content-Length"] = to_string(temp.body.size());
-    return temp;
+    if (request.method == HTTP_POST)
+    {
+        response = handle_post_request(request, *location_config, server_config, fullpath);
+        return apply_error_page(server_config, response.status_code, response);
+    }
+    if (request.method == HTTP_DELETE)
+    {
+        response = handle_delete_request(fullpath);
+        return apply_error_page(server_config, response.status_code, response);
+    }
+    response.status_code = 501;
+    response.reason_phrase = "Not Implemented";
+    response.body = "Router logic not completed yet.\n";
+    response.headers["Content-Type"] = "text/plain";
+    response.headers["Content-Length"] = to_string(response.body.size());
+
+    return apply_error_page(server_config, response.status_code, response);
 }
 
 const LocationConfig* Router::find_location_config(const std::string &uri, const ServerConfig& server_config) const
