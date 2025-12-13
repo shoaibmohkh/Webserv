@@ -28,7 +28,7 @@ HTTPResponse Router::generate_autoindex_response(const std::string& path) const
     std::string html;
     html += "<html>\n<head><title>Index of " + path + "</title></head>\n<body>\n";
     html += "<h1>Index of " + path + "</h1>\n<hr>\n<ul>\n";
-    struct dirent *entry;
+    struct dirent *entry;//-------------------------------
     while ((entry = readdir(dir)) != NULL)
     {
         std::string name = entry->d_name;

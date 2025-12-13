@@ -23,6 +23,40 @@ bool Router::is_cgi_request(const LocationConfig& location_config, const std::st
     return it != location_config.cgiExtensions.end();
 }
 
+// Explanation:
+// This builds environment variables for the CGI script.
+
+// CGI scripts do NOT read HTTP directly.
+// They read environment variables.
+
+// Example Request:
+// POST /cgi/test.py?name=Ali HTTP/1.1
+// Host: localhost
+// Content-Length: 5
+// hello
+
+// Environment Variables Created:
+// Your function builds:
+
+// REQUEST_METHOD=POST
+// QUERY_STRING=name=Ali
+// CONTENT_LENGTH=5
+// SCRIPT_FILENAME=/var/www/site/cgi/test.py
+// SCRIPT_NAME=/cgi/test.py
+// SERVER_NAME=localhost
+// SERVER_PORT=8080
+// SERVER_PROTOCOL=HTTP/1.1
+// GATEWAY_INTERFACE=CGI/1.1
+// SERVER_SOFTWARE=Webserv/1.0
+// HTTP_HOST=localhost
+// HTTP_CONTENT_LENGTH=5
+
+// Why this matters??
+// A Python CGI script can do:
+// import os
+// print(os.environ["REQUEST_METHOD"])
+
+// And it will work.
 std::vector<std::string> Router::build_cgi_environment(const HTTPRequest& request, const std::string& fullpath) const
 {
     std::vector<std::string> env;

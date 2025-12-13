@@ -55,6 +55,33 @@ std::string Router::method_to_string(HTTPMethod method) const
     }
 }
 
+// Example handling POST request:
+// Config:
+// server {
+//     root /var/www/site;
+// }
+// location /upload {
+//     upload_enable on;
+//     upload_store uploads;
+// }
+
+// Request:
+// POST /upload/hello.txt HTTP/1.1
+// Content-Length: 5
+// hello
+
+// File Created:
+// /var/www/site/uploads/hello.txt
+
+// File Content:
+// hello
+
+// Response:
+// HTTP/1.1 201 Created
+// Content-Type: text/plain
+// Content-Length: 39
+// 201 Created: File uploaded successfully.
+
 HTTPResponse Router::handle_post_request(const HTTPRequest& request, const LocationConfig& location_config, const ServerConfig& server_config, const std::string& fullpath) const
 {
     if (location_config.uploadEnable == false)
@@ -67,17 +94,51 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request, const Locat
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
+    // Example Config:
+    // server {
+    //     root /var/www/site;
+    // }
+    //
+    // location /upload {
+    //     upload_enable on;
+    //     upload_store uploads;
+    // }
+    //
+    // Result:
+    // upload_path = "/var/www/site/uploads"
     std::string upload_path =  server_config.root + "/" + location_config.uploadStore;
+    // Then you ensure it ends with /:
+    // /var/www/site/uploads/
+    // This prevents broken paths like:
+    // /var/www/site/uploadsfile.txt
     if (!upload_path.empty() && upload_path[upload_path.size() - 1] != '/')
         upload_path += '/';
+    // Example Request:
+    // POST /upload/photo.png HTTP/1.1
+    // fullpath:
+    // /var/www/site/upload/photo.png
+    // Extracted filename:
+    // photo.png
     std::string filename;
     size_t last_slash = fullpath.find_last_of('/');
     if (last_slash != std::string::npos && last_slash + 1 < fullpath.size())
         filename = fullpath.substr(last_slash + 1);
+    // Case: No Filename in URL
+    // Request:
+    // POST /upload HTTP/1.1
+
+    // No filename after /upload.
+
+    // Your fallback:
+    // filename = "upload_1700000000.bin";
+
+    // ✔ This is very good
+    // ✔ Prevents overwrite
+    // ✔ Prevents empty filename
     if (filename.empty())
         filename = "upload_" + to_string(time(NULL)) + ".bin";
     std::string final_upload_path = upload_path + filename;
-    int fd = open(final_upload_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(final_upload_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644); // Permissions: rw-r--r--
     if (fd < 0)
     {
         HTTPResponse response;
@@ -88,7 +149,7 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request, const Locat
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-    ssize_t bytes_written = write(fd, request.body.c_str(), request.body.size());
+    ssize_t bytes_written = write(fd, request.body.c_str(), request.body.size()); // Write Request Body to File
     close(fd);
     if (bytes_written < 0)
     {

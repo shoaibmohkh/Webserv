@@ -12,6 +12,19 @@
 
 #include "../../include/Router_headers/Router.hpp"
 
+// Explanation:
+// server.root      → where the website lives on disk
+// location.path    → which URL prefix matched
+// uri              → what the client requested
+
+// Example:
+// server.root    = "/var/www/site"
+// location.path  = "/images"
+// uri            = "/images/logo.png"
+
+// Goal:
+// /var/www/site/images/logo.png
+
 std::string Router::final_path(const ServerConfig& server,
                                const LocationConfig& location,
                                const std::string& uri) const
