@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../../include/config_headers/parser.hpp"
+#include "../../include/config_headers/Parser.hpp"
 
 Parser::Parser(const std::vector<Token>& tokens) : _tokens(tokens), _pos(0)
 {
