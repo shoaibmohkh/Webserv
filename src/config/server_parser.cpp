@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../../include/config_headers/Parser.hpp"
+#include "Parser.hpp"
 
 int Parser::port_and_clientMaxBodySize_parse(int &_pos, ServerConfig &serverConfig)
 {

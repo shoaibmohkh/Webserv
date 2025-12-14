@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../../include/config_headers/Tokenizer.hpp"
+#include "Tokenizer.hpp"
 
 Tokenizer::Tokenizer(const std::string& input) : _input(input) , _pos(0), _line(1) {
     std::cout << "Tokenizer created" << std::endl;
