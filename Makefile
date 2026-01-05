@@ -24,21 +24,22 @@ ROUTER_HEADERS = include/Router_headers/Router.hpp
 
 HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS)
 
+HTTP = 
 
 TEST = src/testfile.cpp
 
-CONFIG = src/config/Tokenizer.cpp \
+CONFIG = src/config/location_parser.cpp \
          src/config/parser.cpp \
          src/config/server_parser.cpp \
-         src/config/location_parser.cpp
+         src/config/Tokenizer.cpp
 
 ROUTER = src/Router/Router.cpp \
-         src/Router/router_utils.cpp \
-         src/Router/method_router.cpp \
-         src/Router/files_handeling.cpp \
-         src/Router/cgi_router.cpp \
          src/Router/autoindex.cpp \
-         src/Router/error_page.cpp
+         src/Router/cgi_router.cpp \
+         src/Router/error_page.cpp \
+         src/Router/files_handeling.cpp \
+         src/Router/method_router.cpp \
+         src/Router/router_utils.cpp
 
 SRCS = $(TEST) $(CONFIG) $(ROUTER)
 
