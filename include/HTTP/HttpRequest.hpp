@@ -32,6 +32,7 @@ class HTTPRequest {
         std::map<std::string, std::string> headers; // Headers as key-value map
         std::string host;                        // Extracted host from headers
         int port;                                // Extracted port from Host header
+        bool keepAlive;                         // true if Connection: keep-alive, false otherwise
     };
 
 
