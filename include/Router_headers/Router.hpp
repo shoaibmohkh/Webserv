@@ -13,8 +13,8 @@
 #ifndef ROUTER_HPP
 #define ROUTER_HPP
 
-#include "HTTPRequest.hpp"
-#include "HTTPResponse.hpp"
+#include "HttpRequest.hpp"
+#include "HttpResponse.hpp"
 #include "Config.hpp"
 #include <iostream>
 #include <algorithm>
