@@ -25,7 +25,10 @@ CONFIG_HEADERS = include/config_headers/Config.hpp \
 
 ROUTER_HEADERS = include/Router_headers/Router.hpp
 
-HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS)
+HTTP_HEADERS = include/HTTP/HttpRequest.hpp \
+               include/HTTP/HttpResponse.hpp
+
+HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS) $(LOGGER_HEADER) $(HTTP_HEADERS)
 
 HTTP = 
 

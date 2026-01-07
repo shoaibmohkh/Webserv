@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef HTTP_HPP
-#define HTTP_HPP
+#ifndef HTTPREQUEST_HPP
+#define HTTPREQUEST_HPP
 
 #include <string>
 #include <map>
@@ -25,13 +25,7 @@ class HttpRequest {
         std::map<std::string, std::string> headers; // headers (name, value)
 };
 
-class HttpResponse {
-    public:
-        int                                statusCode; // 200, 404, etc.
-        std::string                        statusMsg;  // OK, Not Found, etc.
-        std::string                        body;       // response body (if any)
-        std::map<std::string, std::string> headers;    // headers (name, value)
-};
+
 
 
 #endif
