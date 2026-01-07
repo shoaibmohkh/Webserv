@@ -1,5 +1,4 @@
 NAME = webserv
-
 CXX = c++
 RM  = rm -rf
 OBJ_FILE = obj
@@ -11,10 +10,14 @@ ARROW = ✔
 
 INCLUDES = include \
            include/config_headers \
-           include/Router_headers
+           include/Router_headers \
+           src/logger
 
 CXXFLAGS = -Wall -Werror -Wextra -std=c++98 $(addprefix -I, $(INCLUDES))
 
+LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
+
+LOGGER = src/logger/Logger.cpp #this will be deleted later 
 
 CONFIG_HEADERS = include/config_headers/Config.hpp \
                  include/config_headers/Parser.hpp \
@@ -41,7 +44,7 @@ ROUTER = src/Router/Router.cpp \
          src/Router/method_router.cpp \
          src/Router/router_utils.cpp
 
-SRCS = $(TEST) $(CONFIG) $(ROUTER)
+SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER)
 
 OBJS = $(addprefix $(OBJ_FILE)/, $(SRCS:.cpp=.o))
 
