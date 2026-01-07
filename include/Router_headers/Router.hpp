@@ -13,8 +13,9 @@
 #ifndef ROUTER_HPP
 #define ROUTER_HPP
 
-#include "../HttpTypes.hpp"
-#include "../config_headers/Config.hpp"
+#include "HttpRequest.hpp"
+#include "HttpResponse.hpp"
+#include "Config.hpp"
 #include <iostream>
 #include <algorithm>
 #include <sstream>
