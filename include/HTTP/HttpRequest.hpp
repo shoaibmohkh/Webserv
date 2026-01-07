@@ -16,16 +16,23 @@
 #include <string>
 #include <map>
 
-class HttpRequest {
-    public:
-        std::string                        method;  // GET, POST, etc.
-        std::string                        uri;     // "path?query" (as received)
-        std::string                        version; // HTTP/1.0, HTTP/1.1, etc.
-        std::string                        body;    // request body (if any)
-        std::map<std::string, std::string> headers; // headers (name, value)
+enum HTTPMethod {
+    HTTP_GET,
+    HTTP_POST,
+    HTTP_DELETE,
+    HTTP_UNKNOWN
 };
 
-
+class HTTPRequest {
+    public:
+        HTTPMethod method;                       // GET, POST, DELETE as enum
+        std::string uri;                         // "/path/to/resource"
+        std::string version;                     // "HTTP/1.0" or "HTTP/1.1"
+        std::string body;                        // Request body (if any)
+        std::map<std::string, std::string> headers; // Headers as key-value map
+        std::string host;                        // Extracted host from headers
+        int port;                                // Extracted port from Host header
+    };
 
 
 #endif

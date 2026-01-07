@@ -11,6 +11,7 @@ ARROW = ✔
 INCLUDES = include \
            include/config_headers \
            include/Router_headers \
+           include/HTTP \
            src/logger
 
 CXXFLAGS = -Wall -Werror -Wextra -std=c++98 $(addprefix -I, $(INCLUDES))

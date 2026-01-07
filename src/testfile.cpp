@@ -112,9 +112,9 @@
 #include <sstream>
 #include <sys/stat.h>
 
-#include "../include/Router_headers/Router.hpp"
-#include "../include/config_headers/Parser.hpp"
-#include "../include/config_headers/Tokenizer.hpp"
+#include "Router.hpp"
+#include "Parser.hpp"
+#include "Tokenizer.hpp"
 
 HTTPMethod str_to_method(const std::string &m) {
     if (m == "GET") return HTTP_GET;
