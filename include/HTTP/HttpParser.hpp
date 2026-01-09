@@ -6,7 +6,7 @@
 /*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/07 10:14:01 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/07 10:15:17 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/10 00:28:08 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,24 +14,18 @@
 #define HTTPPARSER_HPP
 
 #include "HttpRequest.hpp"
+#include "Logger.hpp"
 #include <string>
 
 class HttpParser {
-	public:
-		HttpParser(const std::string &rawRequest);
-		HTTPRequest parseRequest();
-	
-	private:
-		std::string raw;
-		size_t pos;
-		
-		// Parsing functions
-		HTTPMethod parseMethod(const std::string &methodStr);
-		void parseRequestLine(HTTPRequest &req);
-		void parseHeaders(HTTPRequest &req);
-		void parseBody(HTTPRequest &req);
-	
-		// Helpers functions
+	public :
+		HttpParser(std::string &req);
+	 	HTTPRequest parseRequest();
+	private :
+		const std::string &_request;
+		HTTPRequest httpRequest;
+		size_t _pos;
+		void parseRequestLine();
 		std::string getLine();
 	};
 	
