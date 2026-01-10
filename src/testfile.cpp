@@ -106,11 +106,12 @@
 
 //     return 0;
 // }
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <sys/stat.h>
+#include <vector>   // <-- add
+#include <map>      // (likely already pulled by your headers, but safe)
 
 #include "Router.hpp"
 #include "Parser.hpp"
@@ -123,6 +124,18 @@ HTTPMethod str_to_method(const std::string &m) {
     return HTTP_UNKNOWN;
 }
 
+// Helper: set vector<char> from std::string (C++98)
+static void set_body_from_string(std::vector<char> &dst, const std::string &src) {
+    dst.assign(src.begin(), src.end());
+}
+
+// Helper: print vector<char> safely (binary-safe)
+static void print_body_vector(const std::vector<char> &body) {
+    if (body.empty())
+        return;
+    std::cout.write(&body[0], body.size());
+}
+
 HTTPRequest make_request(const std::string &method, const std::string &uri, const std::string &body = "") {
     HTTPRequest req;
     req.method = str_to_method(method);
@@ -131,19 +144,27 @@ HTTPRequest make_request(const std::string &method, const std::string &uri, cons
     req.headers["Host"] = "localhost";
     req.host = "localhost";
     req.port = 8080;
-    req.body = body;
+
+    // was: req.body = body;
+    set_body_from_string(req.body, body);
+
     return req;
 }
 
 void print_response(const HTTPResponse &res) {
-    std::cout << "STATUS: " << res.status_code << " " << res.reason_phrase << "\n";
-    for (std::map<std::string,std::string>::const_iterator it = res.headers.begin();
-         it != res.headers.end(); ++it)
-    {
-        std::cout << it->first << ": " << it->second << "\n";
-    }
-    std::cout << "BODY:\n" << res.body << "\n";
-    std::cout << "---------------------------------------------\n";
+    // std::cout << "STATUS: " << res.status_code << " " << res.reason_phrase << "\n";
+    // for (std::map<std::string,std::string>::const_iterator it = res.headers.begin();
+    //      it != res.headers.end(); ++it)
+    // {
+    //     std::cout << it->first << ": " << it->second << "\n";
+    // }
+
+    // std::cout << "BODY:\n";
+    // was: std::cout << res.body << "\n";
+    print_body_vector(res.body);
+    // std::cout << "\n";
+
+    // std::cout << "---------------------------------------------\n";
 }
 
 bool file_exists(const std::string &path) {
@@ -160,10 +181,10 @@ int main(int argc, char **argv) {
     else
         configPath = "test_root/router_test.conf";
 
-    std::cout << "Loading config file: " << configPath << std::endl;
+    // std::cout << "Loading config file: " << configPath << std::endl;
 
     if (!file_exists(configPath)) {
-        std::cerr << "ERROR: Config file not found: " << configPath << "\n";
+        // std::cerr << "ERROR: Config file not found: " << configPath << "\n";
         return 1;
     }
 
@@ -179,88 +200,92 @@ int main(int argc, char **argv) {
 
     Router router(cfg);
 
-    // ---------------------------------------------------------
-    // BASIC ROUTING TESTS
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 1: ROOT INDEX =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/")));
+    // // ---------------------------------------------------------
+    // // BASIC ROUTING TESTS
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 1: ROOT INDEX =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/")));
 
-    std::cout << "===== TEST 2: STATIC FILE =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/files/a.txt")));
+    // std::cout << "===== TEST 2: STATIC FILE =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/files/a.txt")));
 
-    std::cout << "===== TEST 3: FILE NOT FOUND =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/files/unknown.txt")));
+    // std::cout << "===== TEST 3: FILE NOT FOUND =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/files/unknown.txt")));
 
-    std::cout << "===== TEST 4: METHOD NOT ALLOWED (DELETE on /files) =====\n";
-    print_response(router.handle_route_Request(make_request("DELETE","/files/a.txt")));
+    // std::cout << "===== TEST 4: METHOD NOT ALLOWED (DELETE on /files) =====\n";
+    // print_response(router.handle_route_Request(make_request("DELETE","/files/a.txt")));
 
-    std::cout << "===== TEST 5: PRIVATE DIRECTORY (403 Forbidden) =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/private_dir/")));
+    // std::cout << "===== TEST 5: PRIVATE DIRECTORY (403 Forbidden) =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/private_dir/")));
 
-    std::cout << "===== TEST 6: AUTOINDEX DIRECTORY =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/listing_dir/")));
+    // std::cout << "===== TEST 6: AUTOINDEX DIRECTORY =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/listing_dir/")));
 
-    std::cout << "===== TEST 7: REDIRECT (/old → /new_location) =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/old")));
+    // std::cout << "===== TEST 7.0: REDIRECT (/old → /new_location) =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/old")));
+    // std::cout << "===== TEST 7.1: image autoindex_dir =====\n";
+    print_response(router.handle_route_Request(make_request("GET","/autoindex_dir/file2.png")));
 
-    // ---------------------------------------------------------
-    // CGI TEST
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 8: CGI TEST =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/cgi/test.py")));
+    // // ---------------------------------------------------------
+    // // CGI TEST
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 8: CGI TEST =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/cgi/test.py")));
 
-    // ---------------------------------------------------------
-    // POST UPLOAD
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 9: UPLOAD (POST to /uploads) =====\n";
-    print_response(router.handle_route_Request(make_request("POST","/uploads","UPLOADED CONTENT")));
+    // // ---------------------------------------------------------
+    // // POST UPLOAD
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 9: UPLOAD (POST to /uploads) =====\n";
+    // print_response(router.handle_route_Request(make_request("POST","/uploads","UPLOADED CONTENT")));
 
-    // ---------------------------------------------------------
-    // DELETE
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 10: DELETE (delete_zone/removeme.txt) =====\n";
-    print_response(router.handle_route_Request(make_request("DELETE","/delete_zone/removeme.txt")));
+    // // ---------------------------------------------------------
+    // // DELETE
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 10: DELETE (delete_zone/removeme.txt) =====\n";
+    // print_response(router.handle_route_Request(make_request("DELETE","/delete_zone/removeme.txt")));
 
-    // ---------------------------------------------------------
-    // NORMAL 404 (router)
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 11: FULL 404 TEST =====\n";
-    print_response(router.handle_route_Request(make_request("GET","/does/not/exist")));
+    // // ---------------------------------------------------------
+    // // NORMAL 404 (router)
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 11: FULL 404 TEST =====\n";
+    // print_response(router.handle_route_Request(make_request("GET","/does/not/exist")));
 
-    // ---------------------------------------------------------
-    // CUSTOM 404
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 12: CUSTOM 404 PAGE =====\n";
-    HTTPResponse r404;
-    r404.status_code = 404;
-    r404.reason_phrase = "Not Found";
-    r404.body = "ORIGINAL 404";
-    r404 = router.apply_error_page(cfg.servers[0], 404, r404);
-    print_response(r404);
+    // // ---------------------------------------------------------
+    // // CUSTOM 404
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 12: CUSTOM 404 PAGE =====\n";
+    // HTTPResponse r404;
+    // r404.status_code = 404;
+    // r404.reason_phrase = "Not Found";
+    // // was: r404.body = "ORIGINAL 404";
+    // set_body_from_string(r404.body, "ORIGINAL 404");
+    // r404 = router.apply_error_page(cfg.servers[0], 404, r404);
+    // print_response(r404);
 
-    // ---------------------------------------------------------
-    // CUSTOM 403
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 13: CUSTOM 403 PAGE =====\n";
-    HTTPResponse r403;
-    r403.status_code = 403;
-    r403.reason_phrase = "Forbidden";
-    r403.body = "ORIGINAL 403";
-    r403 = router.apply_error_page(cfg.servers[0], 403, r403);
-    print_response(r403);
+    // // ---------------------------------------------------------
+    // // CUSTOM 403
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 13: CUSTOM 403 PAGE =====\n";
+    // HTTPResponse r403;
+    // r403.status_code = 403;
+    // r403.reason_phrase = "Forbidden";
+    // // was: r403.body = "ORIGINAL 403";
+    // set_body_from_string(r403.body, "ORIGINAL 403");
+    // r403 = router.apply_error_page(cfg.servers[0], 403, r403);
+    // print_response(r403);
 
-    // ---------------------------------------------------------
-    // CUSTOM 500
-    // CORRECTED TEST — now simulates a real server 500
-    // ---------------------------------------------------------
-    std::cout << "===== TEST 14: CUSTOM 500 PAGE (Simulated) =====\n";
-    HTTPResponse r500;
-    r500.status_code = 500;
-    r500.reason_phrase = "Internal Server Error";
-    r500.body = "Original internal error before replacement";
-    r500 = router.apply_error_page(cfg.servers[0], 500, r500);
-    print_response(r500);
+    // // ---------------------------------------------------------
+    // // CUSTOM 500
+    // // CORRECTED TEST — now simulates a real server 500
+    // // ---------------------------------------------------------
+    // std::cout << "===== TEST 14: CUSTOM 500 PAGE (Simulated) =====\n";
+    // HTTPResponse r500;
+    // r500.status_code = 500;
+    // r500.reason_phrase = "Internal Server Error";
+    // // was: r500.body = "Original internal error before replacement";
+    // set_body_from_string(r500.body, "Original internal error before replacement");
+    // r500 = router.apply_error_page(cfg.servers[0], 500, r500);
+    // print_response(r500);
 
     return 0;
 }
-

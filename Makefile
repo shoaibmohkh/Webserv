@@ -14,7 +14,7 @@ INCLUDES = include \
            include/HTTP \
            src/logger
 
-CXXFLAGS = -Wall -Werror -Wextra -std=c++98 $(addprefix -I, $(INCLUDES))
+CXXFLAGS = -Wall -Werror -Wextra -g3 -std=c++98 $(addprefix -I, $(INCLUDES))
 
 LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
 

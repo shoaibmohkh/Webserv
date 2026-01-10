@@ -16,14 +16,23 @@
 
 #include <string>
 #include <map>
-
+#include <vector>
 
 class HTTPResponse {
 	public:
 		int status_code;                          // 200, 404, etc.
 		std::string reason_phrase;                // "OK", "Not Found", etc.
-		std::string body;                         // Response body
+		std::vector<char> body;                         // Response body
 		std::map<std::string, std::string> headers; // Headers as key-value map
-	};
+	
+	void set_body(const std::string& text)
+    {
+        body.assign(text.begin(), text.end());
+    }
+	void set_body(const std::vector<char>& data)
+    {
+        body = data;
+    }
+};
 
 #endif

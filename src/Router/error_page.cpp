@@ -76,7 +76,7 @@ HTTPResponse Router::apply_error_page(const ServerConfig& server_config, int sta
     close(fd);
     if (bytes_read < 0)
         return response;
-    response.body = body;
+    response.set_body(body);
     response.headers["Content-Length"] = to_string(response.body.size());
     response.headers["Content-Type"] = "text/html";
     return response;

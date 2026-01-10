@@ -15,6 +15,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 enum HTTPMethod {
     HTTP_GET,
@@ -28,12 +29,17 @@ class HTTPRequest {
         HTTPMethod method;                       // GET, POST, DELETE as enum
         std::string uri;                         // "/path/to/resource"
         std::string version;                     // "HTTP/1.0" or "HTTP/1.1"
-        std::string body;                        // Request body (if any)
+        std::vector<char> body;                        // Request body (if any)
         std::map<std::string, std::string> headers; // Headers as key-value map
         std::string host;                        // Extracted host from headers
         int port;                                // Extracted port from Host header
         bool keepAlive;                         // true if Connection: keep-alive, false otherwise
-    };
+
+    void set_body(const std::string& text)
+    {
+        body.assign(text.begin(), text.end());
+    }
+};
 
 
 #endif
