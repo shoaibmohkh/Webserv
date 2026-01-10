@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <map>
-
+#include "HttpParser.hpp"
 // ------------------------
 // Mock Partner 1
 // ------------------------
@@ -36,52 +36,17 @@ std::vector<std::string> get_mock_requests() {
 
     // Malformed request (for testing 400)
     requests.push_back(
-        "BADREQUEST /oops HTTP/1.0\r\n"
+        "BADREQUEST /oops HTTP/1.0\n\r\n"
         "\r\n"
     );
 
     return requests;
 }
 
-// ------------------------
-// Your parser interface (mock example)
-// ------------------------
-struct HTTPRequest {
-    std::string method;
-    std::string uri;
-    std::string version;
-    std::string body;
-    std::map<std::string, std::string> headers;
-};
-
-// Example parser stub
-HTTPRequest parse_http_request(const std::string &raw) {
-    HTTPRequest req;
-    // --- minimal parsing just for demonstration ---
-    size_t pos = raw.find("\r\n");
-    std::string request_line = raw.substr(0, pos);
-    size_t method_end = request_line.find(' ');
-    size_t uri_end = request_line.find(' ', method_end + 1);
-
-    req.method = request_line.substr(0, method_end);
-    req.uri = request_line.substr(method_end + 1, uri_end - method_end - 1);
-    req.version = request_line.substr(uri_end + 1);
-
-    // Headers & body parsing would go here
-    return req;
-}
 
 int main() {
     std::vector<std::string> mock_requests = get_mock_requests();
 
-    for (size_t i = 0; i < mock_requests.size(); ++i) {
-        std::cout << "----- Processing Mock Request #" << (i + 1) << " -----\n";
-        HTTPRequest req = parse_http_request(mock_requests[i]);
-        std::cout << "Method: " << req.method << "\n";
-        std::cout << "URI: " << req.uri << "\n";
-        std::cout << "Version: " << req.version << "\n";
-        std::cout << "---------------------------------------------\n\n";
-    }
-
-    return 0;
+    HttpParser req1(mock_requests[3]);
+    req1.parseRequest();
 }

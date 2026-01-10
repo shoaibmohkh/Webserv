@@ -6,7 +6,7 @@
 /*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/07 10:15:59 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/10 01:02:37 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/10 21:04:25 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,8 +17,8 @@ Logger logger;
 HttpParser::HttpParser(std::string &req) : _request(req), _pos(0){}
 
 HTTPRequest HttpParser::parseRequest(){
-	this->parseRequestLine();
-
+	parseRequestLine();
+//	parseHeaders();
 
 	return httpRequest;
 }
@@ -47,13 +47,19 @@ void HttpParser::parseRequestLine(){
 		httpRequest.method = HTTP_POST;
 	else {
 		httpRequest.method = HTTP_UNKNOWN;
+		// 400 - bad request
 		logger.log(ERROR, "parseRequestLine - HttpParser", "UNKNOWN HTTP METHOD!");
 	}
 		
-	
+	std::cout << "The Method is " + method + "\n" + "The uri is " + httpRequest.uri + "\n" + "The version is " + httpRequest.version<<std::endl; 
 	return ;
 	
 }
+
+// void HttpParser::parseHeaders()
+// {
+	
+// }
 
 std::string HttpParser::getLine(){
 	

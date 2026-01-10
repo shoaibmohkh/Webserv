@@ -14,11 +14,9 @@ INCLUDES = include \
            include/HTTP \
            src/logger
 
-CXXFLAGS = -Wall -Werror -Wextra -std=c++98 $(addprefix -I, $(INCLUDES))
+CXXFLAGS = -Wall -Werror -Wextra -std=c++98 -g3 $(addprefix -I, $(INCLUDES))
 
-LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
-
-LOGGER = src/logger/Logger.cpp #this will be deleted later 
+LOGGER_HEADER = src/logger/Logger.hpp
 
 CONFIG_HEADERS = include/config_headers/Config.hpp \
                  include/config_headers/Parser.hpp \
@@ -27,13 +25,16 @@ CONFIG_HEADERS = include/config_headers/Config.hpp \
 ROUTER_HEADERS = include/Router_headers/Router.hpp
 
 HTTP_HEADERS = include/HTTP/HttpRequest.hpp \
-               include/HTTP/HttpResponse.hpp
+               include/HTTP/HttpResponse.hpp \
+               include/HTTP/HttpParser.hpp
 
 HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS) $(LOGGER_HEADER) $(HTTP_HEADERS)
 
-HTTP = 
+HTTP = src/HTTP/Parser/HttpParser.cpp
 
-TEST = src/testfile.cpp
+TEST = src/eyad-test.cpp
+
+LOGGER = src/logger/Logger.cpp
 
 CONFIG = src/config/location_parser.cpp \
          src/config/parser.cpp \
@@ -48,7 +49,7 @@ ROUTER = src/Router/Router.cpp \
          src/Router/method_router.cpp \
          src/Router/router_utils.cpp
 
-SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER)
+SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER) $(HTTP)
 
 OBJS = $(addprefix $(OBJ_FILE)/, $(SRCS:.cpp=.o))
 
