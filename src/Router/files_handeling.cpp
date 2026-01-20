@@ -46,31 +46,31 @@ HTTPResponse Router::serve_static_file(const std::string& fullpath) const
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
-        response.body = "404 Not Found";
+        response.set_body("404 Not Found");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-    std::string body;
+    std::vector<char> body;
     char buffer[8192];
     ssize_t bytes_read = 0;
     while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0)
     {
-        body.append(buffer, bytes_read);
+        body.insert(body.end(), buffer, buffer + bytes_read);
     }
     close(fd);
     if (bytes_read < 0)
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error";
+        response.set_body("500 Internal Server Error");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
     response.status_code = 200;
     response.reason_phrase = "OK";
-    response.body = body;
+    response.set_body(body);
     response.headers["Content-Length"] = to_string(response.body.size());
     response.headers["Content-Type"] = get_mime_type(fullpath);
     return response;

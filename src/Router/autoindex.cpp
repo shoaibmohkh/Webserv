@@ -20,7 +20,7 @@ HTTPResponse Router::generate_autoindex_response(const std::string& path) const
         HTTPResponse response;
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error";
+        response.set_body("500 Internal Server Error: Unable to open directory.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -66,7 +66,7 @@ HTTPResponse Router::generate_autoindex_response(const std::string& path) const
     HTTPResponse response;
     response.status_code = 200;
     response.reason_phrase = "OK";
-    response.body = html;
+    response.set_body(html);
     response.headers["Content-Type"] = "text/html";
     response.headers["Content-Length"] = to_string(response.body.size());
 

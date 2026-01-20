@@ -14,12 +14,12 @@
 
 Router::Router(const Config& config) : _config(config)
 {
-    std::cout << "Router initialized with " << _config.servers.size() << " server(s)." << std::endl;
+    // std::cout << "Router initialized with " << _config.servers.size() << " server(s)." << std::endl;
 }
 
 Router::~Router()
 {
-    std::cout << "Router destroyed." << std::endl;
+    // std::cout << "Router destroyed." << std::endl;
 }
 
 
@@ -322,7 +322,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: No server configurations available.";
+        response.set_body("500 Internal Server Error: No server configurations available.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
@@ -335,7 +335,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
-        response.body = "404 Not Found";
+        response.set_body("404 Not Found");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
@@ -415,7 +415,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
         }
         response.headers["Allow"] = allowed_methods;
 
-        response.body = "405 Method Not Allowed";
+        response.set_body("405 Method Not Allowed");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
@@ -426,7 +426,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
         response.status_code = location_config->returnCode;
         response.reason_phrase = "Redirect";
         response.headers["Location"] = location_config->returnPath;
-        response.body = "Redirecting to " + location_config->returnPath;
+        response.set_body("Redirecting to " + location_config->returnPath);
         response.headers["Content-Length"] = to_string(response.body.size());
 
         return apply_error_page(server_config, response.status_code, response);
@@ -443,7 +443,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
-        response.body = "404 Not Found";
+        response.set_body("404 Not Found");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
@@ -473,7 +473,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
 
             response.status_code = 403;
             response.reason_phrase = "Forbidden";
-            response.body = "403 Forbidden";
+            response.set_body("403 Forbidden");
             response.headers["Content-Length"] = to_string(response.body.size());
             response.headers["Content-Type"] = "text/plain";
 
@@ -481,7 +481,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
         }
         response.status_code = 403; //step nine - case C
         response.reason_phrase = "Forbidden";
-        response.body = "403 Forbidden";
+        response.set_body("403 Forbidden");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
 
@@ -512,7 +512,7 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
     }
     response.status_code = 501;
     response.reason_phrase = "Not Implemented";
-    response.body = "Router logic not completed yet.\n";
+    response.set_body("Router logic not completed yet.\n");
     response.headers["Content-Type"] = "text/plain";
     response.headers["Content-Length"] = to_string(response.body.size());
 

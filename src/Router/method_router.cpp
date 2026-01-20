@@ -89,7 +89,7 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request, const Locat
         HTTPResponse response;
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
-        response.body = "403 Forbidden: Uploads are disabled for this location.";
+        response.set_body("403 Forbidden: Uploads are not enabled for this location.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -144,19 +144,19 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request, const Locat
         HTTPResponse response;
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: Unable to open upload path.";
+        response.set_body("500 Internal Server Error: Unable to open upload path.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-    ssize_t bytes_written = write(fd, request.body.c_str(), request.body.size()); // Write Request Body to File
+    ssize_t bytes_written = write(fd, &request.body[0], request.body.size()); // Write Request Body to File
     close(fd);
     if (bytes_written < 0)
     {
         HTTPResponse response;
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: Unable to write to upload path.";
+        response.set_body("500 Internal Server Error: Unable to write to upload path.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -164,7 +164,7 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request, const Locat
     HTTPResponse response;
     response.status_code = 201;
     response.reason_phrase = "Created";
-    response.body = "201 Created: File uploaded successfully.";
+    response.set_body("201 Created: File uploaded successfully.");
     response.headers["Content-Length"] = to_string(response.body.size());
     response.headers["Content-Type"] = "text/plain";
     return response;
@@ -178,7 +178,7 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         HTTPResponse response;
         response.status_code = 404;
         response.reason_phrase = "Not Found";
-        response.body = "404 Not Found: File does not exist.";
+        response.set_body("404 Not Found: File does not exist.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -188,7 +188,7 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         HTTPResponse response;
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
-        response.body = "403 Forbidden: Cannot delete a directory.";
+        response.set_body("403 Forbidden: Cannot delete a directory.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -200,7 +200,7 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
             HTTPResponse response;
             response.status_code = 403;
             response.reason_phrase = "Forbidden";
-            response.body = "403 Forbidden: Permission denied.";
+            response.set_body("403 Forbidden: Permission denied.");
             response.headers["Content-Length"] = to_string(response.body.size());
             response.headers["Content-Type"] = "text/plain";
             return response;
@@ -208,7 +208,7 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         HTTPResponse response;
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: Unable to delete the file.";
+        response.set_body("500 Internal Server Error: Unable to delete the file.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -216,7 +216,7 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
     HTTPResponse response;
     response.status_code = 200;
     response.reason_phrase = "OK";
-    response.body = "200 OK: File deleted successfully.";
+    response.set_body("200 OK: File deleted successfully.");
     response.headers["Content-Length"] = to_string(response.body.size());
     response.headers["Content-Type"] = "text/plain";
     return response;

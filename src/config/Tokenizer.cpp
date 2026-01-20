@@ -13,11 +13,11 @@
 #include "Tokenizer.hpp"
 
 Tokenizer::Tokenizer(const std::string& input) : _input(input) , _pos(0), _line(1) {
-    std::cout << "Tokenizer created" << std::endl;
+    // std::cout << "Tokenizer created" << std::endl;
 }
 
 Tokenizer::~Tokenizer() {
-    std::cout << "Tokenizer destroyed" << std::endl;
+    // std::cout << "Tokenizer destroyed" << std::endl;
 }
 
 void Tokenizer::skip_sp(int &_pos)

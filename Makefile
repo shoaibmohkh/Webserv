@@ -12,9 +12,11 @@ INCLUDES = include \
            include/config_headers \
            include/Router_headers \
            include/HTTP \
+           RouterByteHandler \
+           include/sockets \
            src/logger
 
-CXXFLAGS = -Wall -Werror -Wextra -std=c++98 $(addprefix -I, $(INCLUDES))
+CXXFLAGS = -Wall -Werror -Wextra -g3 -std=c++98 $(addprefix -I, $(INCLUDES))
 
 LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
 
@@ -46,6 +48,10 @@ ROUTER = src/Router/Router.cpp \
          src/Router/error_page.cpp \
          src/Router/files_handeling.cpp \
          src/Router/method_router.cpp \
+         src/sockets/PollReactor.cpp \
+         src/sockets/NetChannel.cpp \
+         src/sockets/NetUtil.cpp \
+         src/Router/RouterByteHandler.cpp \
          src/Router/router_utils.cpp
 
 SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER)

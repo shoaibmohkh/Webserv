@@ -174,7 +174,7 @@ HTTPResponse Router::parse_cgi_response(const std::string& cgi_output) const
         response.headers[it->first] = it->second;
     if (response.headers.find("Content-Type") == response.headers.end())
         response.headers["Content-Type"] = "text/html";
-    response.body = body_section;
+    response.set_body(body_section);
     response.headers["Content-Length"] = to_string(response.body.size());
 
     return response;
@@ -190,7 +190,7 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: CGI extension not found.";
+        response.set_body("500 Internal Server Error: CGI extension not found.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -203,7 +203,7 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: CGI handler not configured.";
+        response.set_body("500 Internal Server Error: CGI handler not configured.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -232,7 +232,7 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: Pipe creation failed.";
+        response.set_body("500 Internal Server Error: Pipe creation failed.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
@@ -243,18 +243,21 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.body = "500 Internal Server Error: Fork failed.";
+        response.set_body("500 Internal Server Error: Fork failed.");
         response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
     else if (pid == 0)
     {
-        dup2(pipe_fd_to_cgi[0], STDIN_FILENO);
-        dup2(pipe_fd_from_cgi[1], STDOUT_FILENO);
-
+        if (dup2(pipe_fd_to_cgi[0], STDIN_FILENO) == -1)
+            _exit(1);
+        if (dup2(pipe_fd_from_cgi[1], STDOUT_FILENO) == -1)
+            _exit(1);
+        close(pipe_fd_to_cgi[0]);
         close(pipe_fd_to_cgi[1]);
         close(pipe_fd_from_cgi[0]);
+        close(pipe_fd_from_cgi[1]);
         if (!script_dir.empty())
             chdir(script_dir.c_str());
 
@@ -266,7 +269,7 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
     close(pipe_fd_from_cgi[1]);
 
     if (!request.body.empty())
-        write(pipe_fd_to_cgi[1], request.body.c_str(), request.body.size());
+        write(pipe_fd_to_cgi[1], &request.body[0], request.body.size());
 
     close(pipe_fd_to_cgi[1]);
 

@@ -14,12 +14,12 @@
 
 Parser::Parser(const std::vector<Token>& tokens) : _tokens(tokens), _pos(0)
 {
-    std::cout << "Parser created." << std::endl;
+    // std::cout << "Parser created." << std::endl;
 }
 
 Parser::~Parser()
 {
-    std::cout << "Parser destroyed." << std::endl;
+    // std::cout << "Parser destroyed." << std::endl;
 }
 
 void Parser::error_msg(int num)
