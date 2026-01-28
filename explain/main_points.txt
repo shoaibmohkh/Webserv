@@ -1,0 +1,13 @@
+HTTP     client: browser              server: nginx
+
+watching vedio about TCP connection
+
+
+parsing for config file --> nginx config
+socket programming -> connection between client and server 
+parsing request
+create respnose
+CGI
+
+
+nc , telnet and curl commands 
