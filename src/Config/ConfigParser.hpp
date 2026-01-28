@@ -1,21 +1,25 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   Client.cpp                                         :+:      :+:    :+:   */
+/*   ConfigParser.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/01/28 19:43:19 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 21:41:00 by eaqrabaw         ###   ########.fr       */
+/*   Created: 2026/01/28 21:51:21 by eaqrabaw          #+#    #+#             */
+/*   Updated: 2026/01/28 21:57:00 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
- 
-#include "Client.hpp"
-  
-Client::Client(int socket_fd) : 
-        fd(socket_fd), 
-        cgi_pipe_fd(-1), 
-        cgi_pid(-1), 
-        state(STATE_READING_REQUEST),
-        last_activity(time(NULL)) {}
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include "Config.hpp"
+
+
+class ConfigParser {
+public:
+    static std::vector<ServerConfig> parse(const std::string& path);
+
+};

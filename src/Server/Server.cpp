@@ -3,77 +3,38 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
+/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 20:41:18 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 21:03:02 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:48:38 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "Server.hpp"
 
-void Server::run() {
-    while (true) {
-        // 1. Poll all registered FDs
-        int poll_count = poll(&_poll_fds[0], _poll_fds.size(), 1000); // 1s timeout
-        if (poll_count < 0) break;
+Server::Server() {}
 
-        for (size_t i = 0; i < _poll_fds.size(); ++i) {
-            int fd = _poll_fds[i].fd;
+Server::~Server() {
+    // Clean up all clients
+    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        close(it->first);
+        delete it->second;
+    }
+    _clients.clear();
 
-            // Handle Incoming Data (Reading)
-            if (_poll_fds[i].revents & POLLIN) {
-                if (is_listener(fd)) {
-                    accept_new_connection(fd);
-                } else {
-                    handle_client_read(fd, *_clients[fd]);
-                }
-            }
-
-            // Handle Outgoing Data (Writing)
-            if (_poll_fds[i].revents & POLLOUT) {
-                handle_client_write(fd, *_clients[fd]);
-            }
-
-            // --- State Transitions & Cleanup ---
-            Client *c = _clients[fd];
-            if (!c) continue;
-
-            // If we just finished reading and need to process
-            if (c->state == STATE_PROCESSING) {
-                process_request(*c); 
-                // Switch this FD's interest from Read to Write
-                _poll_fds[i].events = POLLOUT; 
-            }
-
-            // If the transaction is done or an error occurred
-            if (c->state == STATE_DONE || c->state == STATE_ERROR) {
-                std::cout << "Closing connection on FD " << fd << std::endl;
-                close(fd);
-                delete _clients[fd];
-                _clients.erase(fd);
-                _poll_fds.erase(_poll_fds.begin() + i);
-                --i; // Adjust index because we removed an element
-            }
-        }
+    // Close listeners
+    for (size_t i = 0; i < _listen_fds.size(); ++i) {
+        close(_listen_fds[i]);
     }
 }
 
-void Server::process_request(Client &c) {
-    // 1. Create the Request Object (this triggers the parsing)
-    Request req(c.request_buffer);
-
-    // 2. Logic Check: What did they ask for?
-    std::cout << "Method: " << req.get_method() << " for " << req.get_path() << std::endl;
-    std::cout << "User-Agent: " << req.get_header("User-Agent") << std::endl;
-
-    // 3. Hand off to Response Generator (We'll build this class next)
-    // Response res(req);
-    // c.response_buffer = res.get_raw_response();
-    
-    // For now, simple manual response
-    c.response_buffer = "HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nHello World";
-    c.state = STATE_WRITING_RESPONSE;
+void Server::update_poll_events(int fd, short events) {
+    for (size_t i = 0; i < _poll_fds.size(); ++i) {
+        if (_poll_fds[i].fd == fd) {
+            _poll_fds[i].events = events;
+            return;
+        }
+    }
 }
 
 bool Server::is_listener(int fd) {
@@ -136,12 +97,6 @@ void Server::accept_new_connection(int listen_fd) {
     std::cout << "New client connected on FD " << client_fd << std::endl;
 }
 
-/*
-Non-blocking sockets: By using O_NONBLOCK, if we call recv() and there is no data, the function returns immediately instead of making the whole server wait.
-
-The Map: Using _clients[client_fd] allows us to keep track of which client is at what stage of the HTTP request.
-*/
-
 void Server::handle_client_read(int fd, Client &c) {
     char buffer[4096];
     int bytes_read = recv(fd, buffer, sizeof(buffer) - 1, 0);
@@ -197,16 +152,105 @@ void Server::handle_client_write(int fd, Client &c) {
 }
 
 void Server::process_request(Client &c) {
-    // 1. Parse the incoming raw string
     Request req(c.request_buffer);
 
-    // 2. Generate the appropriate response
-    Response res(req);
+    // CGI Handling
+    if (req.get_path().find(".py") != std::string::npos) {
+        CgiHandler cgi(req, "./www" + req.get_path());
+        int pipe_fd = cgi.launch();
 
-    // 3. Feed the response back to the client buffer
+        if (pipe_fd != -1) {
+            c.cgi_pipe_fd = pipe_fd;
+            c.cgi_pid = cgi.get_pid();
+            c.state = STATE_WAITING_FOR_CGI;
+
+            _cgi_fds[pipe_fd] = &c;
+            pollfd pfd = {pipe_fd, POLLIN, 0};
+            _poll_fds.push_back(pfd);
+            return; 
+        }
+    }
+
+    // Static Handling
+    Response res(req);
     c.response_buffer = res.get_raw_response();
-    
-    // 4. Update the state machine
     c.state = STATE_WRITING_RESPONSE;
+    
+    // Switch from listening for data to waiting for the buffer to clear
+    update_poll_events(c.fd, POLLOUT);
+}
+
+void Server::handle_cgi_read(int pipe_fd, size_t &poll_idx) {
+    Client *c = _cgi_fds[pipe_fd];
+    char buffer[4096];
+    int bytes = read(pipe_fd, buffer, sizeof(buffer) - 1);
+
+    if (bytes > 0) {
+        buffer[bytes] = '\0';
+        c->response_buffer.append(buffer, bytes);
+        c->last_activity = time(NULL);
+    } else {
+        // Pipe closed, CGI is done
+        c->state = STATE_WRITING_RESPONSE;
+        close(pipe_fd);
+        _cgi_fds.erase(pipe_fd);
+        _poll_fds.erase(_poll_fds.begin() + poll_idx);
+        poll_idx--; // Adjust loop index
+
+        // Find client socket in poll_fds to switch to POLLOUT
+        for (size_t i = 0; i < _poll_fds.size(); ++i) {
+            if (_poll_fds[i].fd == c->fd) {
+                _poll_fds[i].events = POLLOUT;
+                break;
+            }
+        }
+    }
+}
+
+void Server::run() {
+    while (true) {
+        int poll_count = poll(&_poll_fds[0], _poll_fds.size(), 1000);
+        if (poll_count < 0) break;
+
+        for (size_t i = 0; i < _poll_fds.size(); ++i) {
+            int fd = _poll_fds[i].fd;
+
+            if (_poll_fds[i].revents & POLLIN) {
+                if (is_listener(fd)) {
+                    accept_new_connection(fd);
+                } else if (_clients.count(fd)) {
+                    handle_client_read(fd, *_clients[fd]);
+                } else if (_cgi_fds.count(fd)) {
+                    // This is a CGI pipe ready to be read
+                    handle_cgi_read(fd, i);
+                }
+            }
+
+            if (_poll_fds[i].revents & POLLOUT) {
+                if (_clients.count(fd))
+                    handle_client_write(fd, *_clients[fd]);
+            }
+
+            // --- State Transitions ---
+            if (_clients.count(fd)) {
+                Client *c = _clients[fd];
+                if (c->state == STATE_PROCESSING) {
+                    process_request(*c);
+                }
+                
+                // Cleanup finished clients
+                if (c->state == STATE_DONE || c->state == STATE_ERROR) {
+                    std::cout << "Closing connection on FD " << fd << std::endl;
+                    close(fd);
+                    delete _clients[fd];
+                    _clients.erase(fd);
+                    _poll_fds.erase(_poll_fds.begin() + i);
+                    --i;
+                }
+            }
+        }
+        // The Zombie Killer
+        waitpid(-1, NULL, WNOHANG);
+    }
 }
 

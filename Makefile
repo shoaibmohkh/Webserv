@@ -11,23 +11,41 @@ ARROW = ✔
 INCLUDES = src/Logger \
            src/Client \
            src/Server \
+		   src/CGIHandler \
+		   src/Request \
+		   src/Response \
+		   src/Config
 
 CXXFLAGS = -Wall -Werror -Wextra  -std=c++98 $(addprefix -I, $(INCLUDES))
 
 LOGGER = src/Logger/Logger
-Client = src/Client
-Server = src/Server
+Client = src/Client/Client
+Server = src/Server/Server
+CGIHandler= src/CGIHandler/CgiHandler
+Request=src/Request/Request
+Response=src/Response/Response
+Config = src/Config/Config
 
 HEADERS =  $(LOGGER).hpp \
            $(Client).hpp \
            $(Server).hpp \
+		   $(CGIHandler).hpp \
+		   $(Request).hpp \
+		   $(Response).hpp \
+		   $(Config)Parser.hpp \
+		   $(Config).hpp
 
           
-TEST = src/testfile
+TEST = src/main.cpp
 
 SRCS = $(LOGGER).cpp \
        $(Client).cpp \
-       $(WebServer).cpp \
+       $(Server).cpp \
+	   $(CGIHandler).cpp \
+	   $(Request).cpp \
+	   $(Response).cpp \
+	   src/main.cpp \
+	   $(Config)Parser.cpp 
 
 
 OBJS = $(addprefix $(OBJ_FILE)/, $(SRCS:.cpp=.o))
