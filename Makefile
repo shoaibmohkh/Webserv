@@ -1,82 +1,84 @@
-NAME = webserv
-CXX = c++
-RM  = rm -rf
-OBJ_FILE = obj
+NAME        := webserv
+CXX         := c++
+RM          := rm -rf
+OBJ_DIR     := obj
 
-GREEN = \033[0;32m
-RED   = \033[0;31m
-RESET = \033[0m
-ARROW = ✔
+GREEN := \033[0;32m
+RED   := \033[0;31m
+RESET := \033[0m
+ARROW := ✔
 
-INCLUDES = include \
-           include/config_headers \
-           include/Router_headers \
-           include/HTTP \
-           RouterByteHandler \
-           include/sockets \
-           src/logger
+INCLUDES := include \
+            include/config_headers \
+            include/Router_headers \
+            include/HTTP \
+            include/HTTP/http10 \
+            include/sockets
 
-CXXFLAGS = -Wall -Werror -Wextra -g3 -std=c++98 $(addprefix -I, $(INCLUDES))
+CXXFLAGS := -Wall -Wextra -Werror -std=c++98 -g3 $(addprefix -I, $(INCLUDES))
 
-LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
+CONFIG_SRCS := \
+	location_parser.cpp \
+	parser.cpp \
+	server_parser.cpp \
+	Tokenizer.cpp
 
-LOGGER = src/logger/Logger.cpp #this will be deleted later 
+HTTP_SRCS := \
+	Http10Parser.cpp \
+	Http10Serializer.cpp
 
-CONFIG_HEADERS = include/config_headers/Config.hpp \
-                 include/config_headers/Parser.hpp \
-                 include/config_headers/Tokenizer.hpp
+SOCKET_SRCS := \
+	PollReactor.cpp \
+	NetChannel.cpp \
+	NetUtil.cpp \
+	ListenPort.cpp
 
-ROUTER_HEADERS = include/Router_headers/Router.hpp
+ROUTER_SRCS := \
+	Router.cpp \
+	autoindex.cpp \
+	cgi_router.cpp \
+	error_page.cpp \
+	files_handeling.cpp \
+	method_router.cpp \
+	router_utils.cpp \
+	RouterByteHandler.cpp
 
-HTTP_HEADERS = include/HTTP/HttpRequest.hpp \
-               include/HTTP/HttpResponse.hpp
+MAIN_SRC := main.cpp
 
-HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS) $(LOGGER_HEADER) $(HTTP_HEADERS)
+SRCS := \
+	$(CONFIG_SRCS) \
+	$(HTTP_SRCS) \
+	$(SOCKET_SRCS) \
+	$(ROUTER_SRCS) \
+	$(MAIN_SRC)
 
-HTTP = 
+VPATH := \
+	src \
+	src/config \
+	src/HTTP \
+	src/Router \
+	src/sockets
 
-TEST = src/testfile.cpp
-
-CONFIG = src/config/location_parser.cpp \
-         src/config/parser.cpp \
-         src/config/server_parser.cpp \
-         src/config/Tokenizer.cpp
-
-ROUTER = src/Router/Router.cpp \
-         src/Router/autoindex.cpp \
-         src/Router/cgi_router.cpp \
-         src/Router/error_page.cpp \
-         src/Router/files_handeling.cpp \
-         src/Router/method_router.cpp \
-         src/sockets/PollReactor.cpp \
-         src/sockets/NetChannel.cpp \
-         src/sockets/NetUtil.cpp \
-         src/Router/RouterByteHandler.cpp \
-         src/Router/router_utils.cpp
-
-SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER)
-
-OBJS = $(addprefix $(OBJ_FILE)/, $(SRCS:.cpp=.o))
-
+OBJS := $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 
 all: $(NAME)
 
 $(NAME): $(OBJS)
-	@echo "$(GREEN)Making $(NAME)...$(RESET)"
+	@echo "$(GREEN)Linking $(NAME)...$(RESET)"
 	@$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
 	@echo "$(GREEN)Done $(ARROW)$(RESET)"
 
-$(OBJ_FILE)/%.o: %.cpp $(HEADERS)
-	@mkdir -p $(dir $@)
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(OBJ_DIR)
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@echo "$(RED)Deleting $(OBJ_FILE)...$(RESET)"
-	@$(RM) $(OBJ_FILE)
+	@echo "$(RED)Removing object files...$(RESET)"
+	@$(RM) $(OBJ_DIR)
 	@echo "$(RED)Done $(ARROW)$(RESET)"
 
 fclean: clean
-	@echo "$(RED)Deleting $(NAME)...$(RESET)"
+	@echo "$(RED)Removing executable...$(RESET)"
 	@$(RM) $(NAME)
 	@echo "$(RED)Done $(ARROW)$(RESET)"
 

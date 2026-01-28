@@ -1,0 +1,194 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   method_router.cpp                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/01/28 11:17:07 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/01/28 11:17:07 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+#include "../../include/Router_headers/Router.hpp"
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#include <ctime>
+
+bool Router::is_method_allowed(const LocationConfig& location_config, HTTPMethod method) const
+{
+    if (location_config.allowMethods.empty())
+        return true;
+
+    std::string method_str;
+    switch (method)
+    {
+        case HTTP_GET:    method_str = "GET";    break;
+        case HTTP_POST:   method_str = "POST";   break;
+        case HTTP_DELETE: method_str = "DELETE"; break;
+        default:          return false;
+    }
+
+    for (std::vector<std::string>::const_iterator it = location_config.allowMethods.begin();
+         it != location_config.allowMethods.end(); ++it)
+    {
+        if (*it == method_str)
+            return true;
+    }
+    return false;
+}
+
+std::string Router::method_to_string(HTTPMethod method) const
+{
+    switch (method)
+    {
+        case HTTP_GET:    return "GET";
+        case HTTP_POST:   return "POST";
+        case HTTP_DELETE: return "DELETE";
+        default:          return "";
+    }
+}
+
+HTTPResponse Router::handle_post_request(const HTTPRequest& request,
+                                        const LocationConfig& location_config,
+                                        const ServerConfig& server_config,
+                                        const std::string& fullpath) const
+{
+    HTTPResponse response;
+
+    if (location_config.uploadEnable == false)
+    {
+        response.status_code = 403;
+        response.reason_phrase = "Forbidden";
+        response.set_body("403 Forbidden: Uploads are not enabled for this location.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    std::string upload_path;
+    if (!location_config.uploadStore.empty() && location_config.uploadStore[0] == '/')
+        upload_path = location_config.uploadStore;
+    else
+        upload_path = server_config.root + "/" + location_config.uploadStore;
+
+    if (!upload_path.empty() && upload_path[upload_path.size() - 1] != '/')
+        upload_path += '/';
+
+    struct stat st;
+    if (stat(upload_path.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+    {
+        response.status_code = 500;
+        response.reason_phrase = "Internal Server Error";
+        response.set_body("500 Internal Server Error: upload_store path does not exist or is not a directory.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    std::string filename;
+    size_t last_slash = fullpath.find_last_of('/');
+    if (last_slash != std::string::npos && last_slash + 1 < fullpath.size())
+        filename = fullpath.substr(last_slash + 1);
+
+    if (filename.empty())
+        filename = "upload_" + to_string(static_cast<size_t>(time(NULL))) + ".bin";
+
+    std::string final_upload_path = upload_path + filename;
+
+    int fd = open(final_upload_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0)
+    {
+        response.status_code = 500;
+        response.reason_phrase = "Internal Server Error";
+        response.set_body("500 Internal Server Error: Unable to open upload file.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    const char* data = request.body.empty() ? NULL : &request.body[0];
+    size_t total = request.body.size();
+    size_t off = 0;
+
+    while (off < total)
+    {
+        ssize_t n = write(fd, data + off, total - off);
+        if (n < 0)
+        {
+            close(fd);
+            response.status_code = 500;
+            response.reason_phrase = "Internal Server Error";
+            response.set_body("500 Internal Server Error: Unable to write upload file.");
+            response.headers["Content-Length"] = to_string(response.body.size());
+            response.headers["Content-Type"] = "text/plain";
+            return response;
+        }
+        off += static_cast<size_t>(n);
+    }
+
+    close(fd);
+
+    response.status_code = 201;
+    response.reason_phrase = "Created";
+    response.set_body("201 Created: File uploaded successfully.");
+    response.headers["Content-Length"] = to_string(response.body.size());
+    response.headers["Content-Type"] = "text/plain";
+    return response;
+}
+
+HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
+{
+    struct stat sb;
+    HTTPResponse response;
+
+    if (stat(fullpath.c_str(), &sb) != 0)
+    {
+        response.status_code = 404;
+        response.reason_phrase = "Not Found";
+        response.set_body("404 Not Found: File does not exist.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    if (S_ISDIR(sb.st_mode))
+    {
+        response.status_code = 403;
+        response.reason_phrase = "Forbidden";
+        response.set_body("403 Forbidden: Cannot delete a directory.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    if (unlink(fullpath.c_str()) < 0)
+    {
+        if (errno == EACCES || errno == EPERM)
+        {
+            response.status_code = 403;
+            response.reason_phrase = "Forbidden";
+            response.set_body("403 Forbidden: Permission denied.");
+            response.headers["Content-Length"] = to_string(response.body.size());
+            response.headers["Content-Type"] = "text/plain";
+            return response;
+        }
+
+        response.status_code = 500;
+        response.reason_phrase = "Internal Server Error";
+        response.set_body("500 Internal Server Error: Unable to delete the file.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
+    response.status_code = 200;
+    response.reason_phrase = "OK";
+    response.set_body("200 OK: File deleted successfully.");
+    response.headers["Content-Length"] = to_string(response.body.size());
+    response.headers["Content-Type"] = "text/plain";
+    return response;
+}
