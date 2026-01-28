@@ -8,53 +8,27 @@ RED   = \033[0;31m
 RESET = \033[0m
 ARROW = ✔
 
-INCLUDES = include \
-           include/config_headers \
-           include/Router_headers \
-           include/HTTP \
-           RouterByteHandler \
-           include/sockets \
-           src/logger
+INCLUDES = src/Logger \
+           src/Client \
+           src/Server \
 
-CXXFLAGS = -Wall -Werror -Wextra -g3 -std=c++98 $(addprefix -I, $(INCLUDES))
+CXXFLAGS = -Wall -Werror -Wextra  -std=c++98 $(addprefix -I, $(INCLUDES))
 
-LOGGER_HEADER = src/logger/Logger.hpp #this will be deleted later 
+LOGGER = src/Logger/Logger
+Client = src/Client
+Server = src/Server
 
-LOGGER = src/logger/Logger.cpp #this will be deleted later 
+HEADERS =  $(LOGGER).hpp \
+           $(Client).hpp \
+           $(Server).hpp \
 
-CONFIG_HEADERS = include/config_headers/Config.hpp \
-                 include/config_headers/Parser.hpp \
-                 include/config_headers/Tokenizer.hpp
+          
+TEST = src/testfile
 
-ROUTER_HEADERS = include/Router_headers/Router.hpp
+SRCS = $(LOGGER).cpp \
+       $(Client).cpp \
+       $(WebServer).cpp \
 
-HTTP_HEADERS = include/HTTP/HttpRequest.hpp \
-               include/HTTP/HttpResponse.hpp
-
-HEADERS = $(CONFIG_HEADERS) $(ROUTER_HEADERS) $(LOGGER_HEADER) $(HTTP_HEADERS)
-
-HTTP = 
-
-TEST = src/testfile.cpp
-
-CONFIG = src/config/location_parser.cpp \
-         src/config/parser.cpp \
-         src/config/server_parser.cpp \
-         src/config/Tokenizer.cpp
-
-ROUTER = src/Router/Router.cpp \
-         src/Router/autoindex.cpp \
-         src/Router/cgi_router.cpp \
-         src/Router/error_page.cpp \
-         src/Router/files_handeling.cpp \
-         src/Router/method_router.cpp \
-         src/sockets/PollReactor.cpp \
-         src/sockets/NetChannel.cpp \
-         src/sockets/NetUtil.cpp \
-         src/Router/RouterByteHandler.cpp \
-         src/Router/router_utils.cpp
-
-SRCS = $(TEST) $(CONFIG) $(ROUTER) $(LOGGER)
 
 OBJS = $(addprefix $(OBJ_FILE)/, $(SRCS:.cpp=.o))
 
