@@ -3,15 +3,26 @@
 /*                                                        :::      ::::::::   */
 /*   Request.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
+/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 20:54:56 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 20:55:01 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:06:59 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "Request.hpp"
 
+/*
+
+Transport: Server class uses poll() to manage sockets.
+
+State Machine: Client class tracks if we are reading or writing.
+
+Parsing: Request class breaks down the HTTP syntax.
+
+Logic: Response class finds the file and builds the output.
+
+*/
 
 Request::Request(const std::string& raw_data) {
     std::string data = raw_data;

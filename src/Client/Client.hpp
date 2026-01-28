@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Client.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
+/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 19:39:45 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 20:51:32 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:16:19 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,13 +26,13 @@ enum e_state {
 };
 
 class Client {
-public:
-    Client(int socket_fd);
-    int             fd;
-    e_state         state;
-    std::string     request_buffer;  // Raw data read from socket
-    std::string     response_buffer; // Data waiting to be sent
-    time_t          last_activity;   // For timeout management
+    public:
+        int         fd;
+        int         cgi_pipe_fd; // The pipe we read from
+        pid_t       cgi_pid;      // The child process ID
+        e_state     state;
+        std::string response_buffer;
+    
 };
 
 #endif

@@ -6,7 +6,7 @@
 /*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 20:41:20 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 20:56:42 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:03:12 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,7 @@
 #include <cstring>
 #include <vector>
 #include "Request.hpp"
+#include "Response.hpp"
 #include <map>
 #include <poll.h>
 #include <netinet/in.h>

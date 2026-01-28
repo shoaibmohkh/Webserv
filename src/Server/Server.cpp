@@ -6,7 +6,7 @@
 /*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 20:41:18 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 20:56:52 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:03:02 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -196,14 +196,17 @@ void Server::handle_client_write(int fd, Client &c) {
     }
 }
 
-// void Server::process_request(Client &c) {
-//     // Simple mock response logic
-//     c.response_buffer = "HTTP/1.1 200 OK\r\n";
-//     c.response_buffer += "Content-Type: text/html\r\n";
-//     c.response_buffer += "Content-Length: 20\r\n";
-//     c.response_buffer += "Connection: close\r\n";
-//     c.response_buffer += "\r\n";
-//     c.response_buffer += "<h1>Hello 42!</h1>";
+void Server::process_request(Client &c) {
+    // 1. Parse the incoming raw string
+    Request req(c.request_buffer);
 
-//     c.state = STATE_WRITING_RESPONSE;
-// }
+    // 2. Generate the appropriate response
+    Response res(req);
+
+    // 3. Feed the response back to the client buffer
+    c.response_buffer = res.get_raw_response();
+    
+    // 4. Update the state machine
+    c.state = STATE_WRITING_RESPONSE;
+}
+

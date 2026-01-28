@@ -3,18 +3,14 @@
 /*                                                        :::      ::::::::   */
 /*   Client.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42.fr>          +#+  +:+       +#+        */
+/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 19:43:19 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2026/01/28 20:30:35 by eaqrabaw         ###   ########.fr       */
+/*   Updated: 2026/01/28 21:15:44 by eaqrabaw         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
  
 #include "Client.hpp"
   
-Client::Client(int socket_fd) : 
-        fd(socket_fd), 
-        state(STATE_READING_REQUEST), 
-        last_activity(time(NULL)) {}
-        
+Client::Client(int socket_fd) : fd(socket_fd), cgi_pipe_fd(-1), cgi_pid(-1), state(STATE_READING_REQUEST) {}
