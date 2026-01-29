@@ -2,15 +2,14 @@
 #define POLLREACTOR_HPP
 
 #include "IByteHandler.hpp"
+#include "ICgiHandler.hpp"
 #include "NetChannel.hpp"
 
 #include <vector>
 #include <map>
 #include <set>
 #include <string>
-
 #include <poll.h>
-#include <pthread.h>
 
 class PollReactor
 {
@@ -27,7 +26,6 @@ public:
     ~PollReactor();
 
     void tickOnce();
-    void pushDone(int clientFd, const std::string& bytes, bool closeAfterWrite);
 
 private:
     void initListeners(const std::vector<int>& ports);
@@ -47,7 +45,14 @@ private:
     void onReadable(int fd);
     void onWritable(int fd);
 
+    // CGI fds events
+    void onCgiOutReadable(int fd);
+    void onCgiInWritable(int fd);
+
     void sweepTimeouts();
+
+    void maybeFinalizeCgi(int clientFd);
+
     std::string::size_type findHdrEnd(const std::string& buf);
 
     bool parseFramingHeaders(const std::string& headerBlock,
@@ -55,26 +60,12 @@ private:
                              bool& outHasLen,
                              size_t& outLen);
 
-    bool tryUnchunk(const std::string& rx,
-                    size_t bodyStart,
-                    size_t& outMsgEnd,
-                    std::string& outBody);
-
-    std::string buildNormalized(const std::string& headerBlock,
-                                const std::string& body,
-                                bool wasChunked);
 
     std::string minimalError(int code, const char* reason);
 
     void dispatchIfIdle(NetChannel& ch);
-    struct DoneItem
-    {
-        int         fd;
-        std::string bytes;
-        bool        closeAfterWrite;
-    };
 
-    void drainDone();
+    void cleanupCgiForClient(NetChannel& ch);
 
 private:
     std::vector<int> _listenSockets;
@@ -91,9 +82,12 @@ private:
     std::map<int, NetChannel> _channels;
     std::set<int> _toDrop;
 
+    // maps CGI pipe fd -> client fd
+    std::map<int, int> _cgiOutToClient;
+    std::map<int, int> _cgiInToClient;
+
     IByteHandler* _handler;
-    pthread_mutex_t _doneMutex;
-    std::vector<DoneItem> _done;
 };
 
 #endif
+

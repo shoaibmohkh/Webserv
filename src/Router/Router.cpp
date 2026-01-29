@@ -20,6 +20,7 @@
 Router::Router(const Config& config) : _config(config) {}
 Router::~Router() {}
 
+
 static bool url_decode_path(const std::string& in, std::string& out)
 {
     out.clear();
@@ -77,7 +78,7 @@ static bool normalize_uri_path(const std::string& rawUri, std::string& out)
             else if (cur == "..")
             {
                 if (parts.empty())
-                    return false; // above root => reject
+                    return false;
                 parts.pop_back();
             }
             else
@@ -127,7 +128,6 @@ const LocationConfig* Router::find_location_config(const std::string &uri,
 
         if (uri.compare(0, loc_path.length(), loc_path) == 0)
         {
-            // boundary: exact match OR next char is '/'
             if (uri.size() == loc_path.size() || uri[loc_path.size()] == '/')
             {
                 int length = (int)loc_path.length();
@@ -145,6 +145,7 @@ const LocationConfig* Router::find_location_config(const std::string &uri,
 
     return best_match;
 }
+
 
 const ServerConfig &Router::find_server_config(const HTTPRequest& request) const
 {
@@ -204,7 +205,6 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
 
     const ServerConfig &server_config = find_server_config(request);
 
-    // 1) Decode %xx (so %2e%2e becomes .. and gets blocked)
     std::string decodedUri;
     if (!url_decode_path(request.uri, decodedUri))
     {
@@ -279,8 +279,13 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
 
     if (is_cgi_request(*location_config, fullpath))
     {
-        response = handle_cgi_request(request, fullpath, *location_config);
-        return apply_error_page(server_config, response.status_code, response);
+        HTTPResponse r;
+        r.status_code = 500;
+        r.reason_phrase = "Internal Server Error";
+        r.set_body("500 Internal Server Error: CGI must be handled asynchronously by RouterByteHandler/PollReactor.\n");
+        r.headers["Content-Type"] = "text/plain";
+        r.headers["Content-Length"] = to_string(r.body.size());
+        return r;
     }
     if (request.method == HTTP_POST)
     {

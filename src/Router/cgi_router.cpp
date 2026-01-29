@@ -1,28 +1,18 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   cgi_router.cpp                                     :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: marvin <marvin@student.42.fr>              +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/11 20:45:33 by marvin            #+#    #+#             */
-/*   Updated: 2026/01/26 00:00:00 by chatgpt           ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #include "../../include/Router_headers/Router.hpp"
 
-#include <poll.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <cerrno>
 
 #include <sstream>
 #include <vector>
 #include <map>
 #include <string>
+#include <cstdlib>
+#include <dirent.h>
 
 static bool set_nonblocking(int fd)
 {
@@ -42,11 +32,41 @@ static void set_cloexec(int fd)
     fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 }
 
+static int get_max_open_fd_from_proc()
+{
+    DIR* d = opendir("/proc/self/fd");
+    if (!d)
+        return 1024;
+
+    int maxfd = -1;
+    for (;;)
+    {
+        errno = 0;
+        struct dirent* ent = readdir(d);
+        if (!ent)
+            break;
+
+        const char* name = ent->d_name;
+        if (name[0] < '0' || name[0] > '9')
+            continue;
+
+        int fd = std::atoi(name);
+        if (fd > maxfd)
+            maxfd = fd;
+    }
+    closedir(d);
+
+    if (maxfd < 0)
+        return 1024;
+    return maxfd + 1;
+}
+
 static void close_fds_from(int start_fd)
 {
-    long maxfd = sysconf(_SC_OPEN_MAX);
-    if (maxfd < 0)
-        maxfd = 1024;
+    int maxfd = get_max_open_fd_from_proc();
+    if (maxfd < start_fd)
+        return;
+
     for (int fd = start_fd; fd < maxfd; ++fd)
         close(fd);
 }
@@ -202,38 +222,24 @@ HTTPResponse Router::parse_cgi_response(const std::string& cgi_output) const
     return response;
 }
 
-HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
-                                       const std::string& fullpath,
-                                       const LocationConfig& location_config) const
+bool Router::spawn_cgi(const HTTPRequest& request,
+                       const std::string& fullpath,
+                       const LocationConfig& location_config,
+                       CgiSpawn& outSpawn) const
 {
-    HTTPResponse response;
+    outSpawn = CgiSpawn();
 
     std::string::size_type dot_pos = fullpath.find_last_of('.');
     if (dot_pos == std::string::npos)
-    {
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: CGI extension not found.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
-    }
+        return false;
 
     std::string extension = fullpath.substr(dot_pos);
     std::map<std::string, std::string>::const_iterator it = location_config.cgiExtensions.find(extension);
     if (it == location_config.cgiExtensions.end())
-    {
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: CGI handler not configured.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
-    }
+        return false;
 
     std::string interpreter = it->second;
 
-    // argv: [interpreter, fullpath, NULL]
     std::vector<char*> args;
     args.push_back(const_cast<char*>(interpreter.c_str()));
     args.push_back(const_cast<char*>(fullpath.c_str()));
@@ -245,224 +251,55 @@ HTTPResponse Router::handle_cgi_request(const HTTPRequest& request,
         envp.push_back(const_cast<char*>(env_vars[i].c_str()));
     envp.push_back(NULL);
 
-    int pipe_fd_to_cgi[2];
-    int pipe_fd_from_cgi[2];
+    int pipe_to_cgi[2];
+    int pipe_from_cgi[2];
 
-    if (pipe(pipe_fd_to_cgi) == -1 || pipe(pipe_fd_from_cgi) == -1)
-    {
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: Pipe creation failed.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
-    }
+    if (pipe(pipe_to_cgi) == -1 || pipe(pipe_from_cgi) == -1)
+        return false;
 
-    set_cloexec(pipe_fd_to_cgi[0]);
-    set_cloexec(pipe_fd_to_cgi[1]);
-    set_cloexec(pipe_fd_from_cgi[0]);
-    set_cloexec(pipe_fd_from_cgi[1]);
+    set_cloexec(pipe_to_cgi[0]);
+    set_cloexec(pipe_to_cgi[1]);
+    set_cloexec(pipe_from_cgi[0]);
+    set_cloexec(pipe_from_cgi[1]);
 
     pid_t pid = fork();
     if (pid < 0)
     {
-        close(pipe_fd_to_cgi[0]); close(pipe_fd_to_cgi[1]);
-        close(pipe_fd_from_cgi[0]); close(pipe_fd_from_cgi[1]);
-
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: Fork failed.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
+        close(pipe_to_cgi[0]); close(pipe_to_cgi[1]);
+        close(pipe_from_cgi[0]); close(pipe_from_cgi[1]);
+        return false;
     }
     else if (pid == 0)
     {
-        if (dup2(pipe_fd_to_cgi[0], STDIN_FILENO) == -1)
+        if (dup2(pipe_to_cgi[0], STDIN_FILENO) == -1)
             _exit(1);
-        if (dup2(pipe_fd_from_cgi[1], STDOUT_FILENO) == -1)
+        if (dup2(pipe_from_cgi[1], STDOUT_FILENO) == -1)
             _exit(1);
 
-        close(pipe_fd_to_cgi[0]); close(pipe_fd_to_cgi[1]);
-        close(pipe_fd_from_cgi[0]); close(pipe_fd_from_cgi[1]);
+        close(pipe_to_cgi[0]); close(pipe_to_cgi[1]);
+        close(pipe_from_cgi[0]); close(pipe_from_cgi[1]);
+
         close_fds_from(3);
 
         execve(interpreter.c_str(), &args[0], &envp[0]);
         _exit(1);
     }
 
-    // Parent
-    close(pipe_fd_to_cgi[0]);
-    close(pipe_fd_from_cgi[1]);
+    // parent keeps: write-end of to_cgi, read-end of from_cgi
+    close(pipe_to_cgi[0]);
+    close(pipe_from_cgi[1]);
 
-    if (!set_nonblocking(pipe_fd_to_cgi[1]) || !set_nonblocking(pipe_fd_from_cgi[0]))
+    if (!set_nonblocking(pipe_to_cgi[1]) || !set_nonblocking(pipe_from_cgi[0]))
     {
-        close(pipe_fd_to_cgi[1]);
-        close(pipe_fd_from_cgi[0]);
+        close(pipe_to_cgi[1]);
+        close(pipe_from_cgi[0]);
         kill(pid, SIGKILL);
         waitpid(pid, NULL, 0);
-
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: Failed to set non-blocking mode for CGI pipes.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
+        return false;
     }
 
-    const char* body_data = request.body.empty() ? NULL : &request.body[0];
-    size_t body_total = request.body.size();
-    size_t body_off = 0;
-
-    bool stdin_closed = false;
-    bool stdout_closed = false;
-
-    std::string cgi_output;
-    const int CGI_TIMEOUT_MS = 30000;
-    int elapsed_ms = 0;
-    const int SLICE_MS = 100;
-
-    int status = 0;
-    bool child_exited = false;
-
-    if (body_total == 0)
-    {
-        close(pipe_fd_to_cgi[1]);
-        stdin_closed = true;
-    }
-
-    while (!(stdin_closed && stdout_closed && child_exited))
-    {
-        struct pollfd fds[2];
-        nfds_t nfds = 0;
-
-        if (!stdin_closed)
-        {
-            fds[nfds].fd = pipe_fd_to_cgi[1];
-            fds[nfds].events = POLLOUT;
-            fds[nfds].revents = 0;
-            nfds++;
-        }
-
-        if (!stdout_closed)
-        {
-            fds[nfds].fd = pipe_fd_from_cgi[0];
-            fds[nfds].events = POLLIN | POLLHUP;
-            fds[nfds].revents = 0;
-            nfds++;
-        }
-
-        int poll_ret = 0;
-        if (nfds > 0)
-            poll_ret = poll(fds, nfds, SLICE_MS);
-
-        if (poll_ret < 0)
-            break;
-
-        elapsed_ms += SLICE_MS;
-        if (elapsed_ms >= CGI_TIMEOUT_MS)
-        {
-            kill(pid, SIGKILL);
-            waitpid(pid, NULL, 0);
-
-            if (!stdin_closed) close(pipe_fd_to_cgi[1]);
-            if (!stdout_closed) close(pipe_fd_from_cgi[0]);
-
-            response.status_code = 504;
-            response.reason_phrase = "Gateway Timeout";
-            response.set_body("504 Gateway Timeout: CGI script execution timed out.");
-            response.headers["Content-Length"] = to_string(response.body.size());
-            response.headers["Content-Type"] = "text/plain";
-            return response;
-        }
-
-        if (!child_exited)
-        {
-            pid_t w = waitpid(pid, &status, WNOHANG);
-            if (w == pid)
-                child_exited = true;
-        }
-
-        for (nfds_t i = 0; i < nfds; ++i)
-        {
-            int fd = fds[i].fd;
-            short re = fds[i].revents;
-
-            if (!stdin_closed && fd == pipe_fd_to_cgi[1])
-            {
-                if (re & (POLLERR | POLLHUP | POLLNVAL))
-                {
-                    close(pipe_fd_to_cgi[1]);
-                    stdin_closed = true;
-                }
-                else if (re & POLLOUT)
-                {
-                    if (body_off < body_total)
-                    {
-                        ssize_t n = write(pipe_fd_to_cgi[1], body_data + body_off, body_total - body_off);
-                        if (n <= 0)
-                        {
-                            close(pipe_fd_to_cgi[1]);
-                            stdin_closed = true;
-                        }
-                        else
-                        {
-                            body_off += static_cast<size_t>(n);
-                            if (body_off >= body_total)
-                            {
-                                close(pipe_fd_to_cgi[1]);
-                                stdin_closed = true;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        close(pipe_fd_to_cgi[1]);
-                        stdin_closed = true;
-                    }
-                }
-            }
-
-            if (!stdout_closed && fd == pipe_fd_from_cgi[0])
-            {
-                if (re & (POLLERR | POLLNVAL))
-                {
-                    close(pipe_fd_from_cgi[0]);
-                    stdout_closed = true;
-                }
-                else if (re & (POLLIN | POLLHUP))
-                {
-                    char buffer[8192];
-                    ssize_t bytes_read = read(pipe_fd_from_cgi[0], buffer, sizeof(buffer));
-                    if (bytes_read > 0)
-                        cgi_output.append(buffer, bytes_read);
-                    else
-                    {
-                        close(pipe_fd_from_cgi[0]);
-                        stdout_closed = true;
-                    }
-                }
-            }
-        }
-    }
-
-    if (!child_exited)
-        waitpid(pid, &status, 0);
-
-    if (!stdin_closed)
-        close(pipe_fd_to_cgi[1]);
-    if (!stdout_closed)
-        close(pipe_fd_from_cgi[0]);
-    if ((WIFEXITED(status) && WEXITSTATUS(status) != 0) && cgi_output.empty())
-    {
-        HTTPResponse r;
-        r.status_code = 502;
-        r.reason_phrase = "Bad Gateway";
-        r.set_body("502 Bad Gateway: CGI execution failed.");
-        r.headers["Content-Type"] = "text/plain";
-        r.headers["Content-Length"] = to_string(r.body.size());
-        return r;
-    }
-
-    return parse_cgi_response(cgi_output);
+    outSpawn.pid  = pid;
+    outSpawn.fdIn = pipe_to_cgi[1];
+    outSpawn.fdOut= pipe_from_cgi[0];
+    return true;
 }

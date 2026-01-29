@@ -16,6 +16,7 @@ NetChannel::NetChannel()
 , _readyMsgs()
 , _closeOnDone(true)
 , _inFlight(false)
+, _cgi()
 {
     markSeen();
     markPhaseSince();
@@ -37,6 +38,7 @@ NetChannel::NetChannel(int sockFd, int acceptFd)
 , _readyMsgs()
 , _closeOnDone(true)
 , _inFlight(false)
+, _cgi()
 {
     markSeen();
     markPhaseSince();
@@ -105,3 +107,5 @@ void NetChannel::setCloseOnDone(bool v) { _closeOnDone = v; }
 
 bool NetChannel::inFlight() const { return _inFlight; }
 void NetChannel::setInFlight(bool v) { _inFlight = v; markPhaseSince(); }
+
+CgiSession& NetChannel::cgi() { return _cgi; }

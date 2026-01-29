@@ -4,6 +4,7 @@
 #include <string>
 #include <deque>
 #include <ctime>
+#include <sys/types.h>
 
 enum IoPhase
 {
@@ -11,6 +12,28 @@ enum IoPhase
     PHASE_RECV_BODY    = 1,
     PHASE_SEND         = 2,
     PHASE_SHUTDOWN     = 3
+};
+
+struct CgiSession
+{
+    bool   active;
+    pid_t  pid;
+    int    fdIn;   // write body -> CGI stdin
+    int    fdOut;  // read CGI stdout
+
+    std::string inBody;
+    size_t      inOff;
+
+    std::string outBuf;
+
+    std::time_t startTs;
+    int         timeoutSec;
+
+    CgiSession()
+    : active(false), pid(-1), fdIn(-1), fdOut(-1),
+      inBody(), inOff(0), outBuf(),
+      startTs(0), timeoutSec(30)
+    {}
 };
 
 class NetChannel
@@ -59,6 +82,8 @@ public:
     bool inFlight() const;
     void setInFlight(bool v);
 
+    CgiSession& cgi();
+
 private:
     int _sockFd;
     int _acceptFd;
@@ -82,6 +107,8 @@ private:
 
     bool _closeOnDone;
     bool _inFlight;
+
+    CgiSession _cgi;
 };
 
 #endif
