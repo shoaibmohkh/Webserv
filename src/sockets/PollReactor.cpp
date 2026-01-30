@@ -639,7 +639,6 @@ bool PollReactor::tryStartAsyncUpload(NetChannel& ch, std::string& msg)
 void PollReactor::pumpAsyncUploads()
 {
     const size_t CHUNK = 1024 * 1024;
-    const int MAX_WRITES_PER_TICK = 10;
 
     for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
     {
@@ -651,7 +650,7 @@ void PollReactor::pumpAsyncUploads()
         size_t total = (up.dataEnd > up.dataStart) ? (up.dataEnd - up.dataStart) : 0;
         if (up.off >= total)
         {
-            // done
+            // done - send 201 response
             closeFd(up.fd);
             up.fd = -1;
             up.active = false;
@@ -675,53 +674,38 @@ void PollReactor::pumpAsyncUploads()
             continue;
         }
 
-        int writes_this_tick = 0;
-        while (writes_this_tick < MAX_WRITES_PER_TICK && up.off < total)
+        size_t left = total - up.off;
+        size_t nwrite = (left > CHUNK) ? CHUNK : left;
+
+        const char* data = up.raw.data() + up.dataStart + up.off;
+        ssize_t n = write(up.fd, data, nwrite);
+
+        if (n > 0)
         {
-            size_t left = total - up.off;
-            size_t nwrite = (left > CHUNK) ? CHUNK : left;
+            up.off += (size_t)n;
+            continue;
+        }
 
-            const char* data = up.raw.data() + up.dataStart + up.off;
-            ssize_t n = write(up.fd, data, nwrite);
-
-            if (n > 0)
+        if (n < 0)
+        {
+            int err = errno;
+            
+            if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
             {
-                up.off += (size_t)n;
-                writes_this_tick++;
-                
-                
-                continue;
+                continue; // Try again next tick
             }
 
-            if (n < 0)
-            {
-                int err = errno;
-                
-                if (err == EAGAIN || err == EWOULDBLOCK)
-                {
-                    break;
-                }
+            // Real failure
+            closeFd(up.fd);
+            up.fd = -1;
+            up.active = false;
+            up.raw.clear();
+            ch.setInFlight(false);
 
-                if (err == EINTR)
-                {
-                    continue;
-                }
-
-                // Real failure
-                closeFd(up.fd);
-                up.fd = -1;
-                up.active = false;
-                up.raw.clear();
-                ch.setInFlight(false);
-
-                ch.txBuffer() = minimalError(500, "Internal Server Error");
-                ch.setCloseOnDone(true);
-                ch.setPhase(PHASE_SEND);
-                setPollMask(ch.sockFd(), POLLIN | POLLOUT);
-                break;
-            }
-
-            break;
+            ch.txBuffer() = minimalError(500, "Internal Server Error");
+            ch.setCloseOnDone(true);
+            ch.setPhase(PHASE_SEND);
+            setPollMask(ch.sockFd(), POLLIN | POLLOUT);
         }
     }
 }
