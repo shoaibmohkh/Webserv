@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   RouterByteHandler.cpp                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*   By: marvin <marvin@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 11:17:45 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/01/28 21:45:21 by sal-kawa         ###   ########.fr       */
+/*   Updated: 2026/01/30 22:20:59 by marvin           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,10 @@
 #include "../../include/HTTP/http10/Http10Serializer.hpp"
 #include "../../include/sockets/ListenPort.hpp"
 
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -217,3 +221,96 @@ CgiFinishResult RouterByteHandler::finishCgi(int acceptFd, int /*clientFd*/, con
     r.closeAfterWrite = true;
     return r;
 }
+bool RouterByteHandler::planUploadFd(int acceptFd,
+                                    const std::string& uri,
+                                    const std::string& mpFilename,
+                                    int& outFd,
+                                    std::string& outErrBytes)
+{
+    outFd = -1;
+    outErrBytes.clear();
+
+    // Only POST uploads route through this (reactor checks POST already)
+    HTTPRequest req;
+    req.uri = uri;
+    req.host = ""; // not needed unless you use name-based vhosts
+    req.version = "HTTP/1.0";
+    req.port = get_listen_port(acceptFd);
+    req.method = HTTP_POST;
+
+    // normalize like Router does
+    std::string decoded;
+    if (!url_decode_path(req.uri, decoded))
+    {
+        outErrBytes = http10::makeError(400, "Bad Request");
+        return true; // it is "upload attempt" but invalid
+    }
+
+    std::string norm;
+    if (!normalize_uri_path(decoded, norm))
+    {
+        outErrBytes = http10::makeError(403, "Forbidden");
+        return true;
+    }
+
+    const ServerConfig& srv = _router->find_server_config(req);
+    const LocationConfig* loc = _router->find_location_config(norm, srv);
+    if (!loc)
+        return false; // not an upload location
+
+    if (loc->uploadEnable == false)
+    {
+        outErrBytes = http10::makeError(403, "Forbidden");
+        return true;
+    }
+
+    // Compute fullpath like Router does (used to derive filename from URL)
+    std::string fullpath = _router->final_path(srv, *loc, norm);
+
+    // upload_store path
+    std::string upload_path;
+    if (!loc->uploadStore.empty() && loc->uploadStore[0] == '/')
+        upload_path = loc->uploadStore;
+    else
+        upload_path = srv.root + "/" + loc->uploadStore;
+
+    if (!upload_path.empty() && upload_path[upload_path.size() - 1] != '/')
+        upload_path += '/';
+
+    struct stat st;
+    if (stat(upload_path.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+    {
+        outErrBytes = http10::makeError(500, "Internal Server Error");
+        return true;
+    }
+
+    // filename from URL or multipart
+    std::string filename;
+    size_t last_slash = fullpath.find_last_of('/');
+    if (last_slash != std::string::npos && last_slash + 1 < fullpath.size())
+        filename = fullpath.substr(last_slash + 1);
+
+    if (filename.empty() && !mpFilename.empty())
+        filename = mpFilename;
+
+    if (filename.empty())
+        filename = "upload_" + _router->to_string((size_t)time(NULL)) + ".bin";
+
+    std::string final_upload_path = upload_path + filename;
+
+    int fd = open(final_upload_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0)
+    {
+        outErrBytes = http10::makeError(500, "Internal Server Error");
+        return true;
+    }
+
+    // ✅ Make file descriptor non-blocking
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags >= 0)
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    outFd = fd;
+    return true;
+}
+

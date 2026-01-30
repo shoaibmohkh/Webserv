@@ -17,6 +17,7 @@ NetChannel::NetChannel()
 , _closeOnDone(true)
 , _inFlight(false)
 , _cgi()
+, _upload()   // ✅ ADD THIS
 {
     markSeen();
     markPhaseSince();
@@ -39,6 +40,7 @@ NetChannel::NetChannel(int sockFd, int acceptFd)
 , _closeOnDone(true)
 , _inFlight(false)
 , _cgi()
+, _upload()   // ✅ ADD THIS
 {
     markSeen();
     markPhaseSince();
@@ -58,6 +60,7 @@ void NetChannel::markPhaseSince() { _phaseSince = std::time(NULL); }
 
 IoPhase NetChannel::phase() const { return _phase; }
 void NetChannel::setPhase(IoPhase p) { _phase = p; markPhaseSince(); }
+
 
 void NetChannel::resetFraming()
 {
@@ -90,16 +93,25 @@ bool NetChannel::hasReadyMsg() const { return !_readyMsgs.empty(); }
 
 std::string NetChannel::popReadyMsg()
 {
+    std::string r;
     if (_readyMsgs.empty())
-        return std::string();
-    std::string r = _readyMsgs.front();
+        return r;
+
+    r.swap(_readyMsgs.front());   // O(1) instead of copying 1GB
     _readyMsgs.pop_front();
     return r;
 }
 
+
+void NetChannel::pushReadyMsg(std::string& msg)
+{
+    _readyMsgs.push_back(std::string());
+    _readyMsgs.back().swap(msg);  // O(1)
+}
+
 void NetChannel::pushReadyMsg(const std::string& msg)
 {
-    _readyMsgs.push_back(msg);
+    _readyMsgs.push_back(msg);    // fallback copy for const callers
 }
 
 bool NetChannel::closeOnDone() const { return _closeOnDone; }
@@ -109,3 +121,4 @@ bool NetChannel::inFlight() const { return _inFlight; }
 void NetChannel::setInFlight(bool v) { _inFlight = v; markPhaseSince(); }
 
 CgiSession& NetChannel::cgi() { return _cgi; }
+NetChannel::UploadSession& NetChannel::upload() { return _upload; }

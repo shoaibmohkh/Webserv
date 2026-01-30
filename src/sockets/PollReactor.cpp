@@ -1,5 +1,6 @@
 #include "../../include/sockets/PollReactor.hpp"
 #include "../../include/sockets/NetUtil.hpp"
+#include "../../include/RouterByteHandler.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -32,6 +33,151 @@ static bool socket_has_fatal_error(int fd)
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) < 0)
         return true;
     return (err != 0);
+}
+
+static std::string asciiLower(const std::string& s)
+{
+    std::string r = s;
+    for (size_t i = 0; i < r.size(); ++i)
+    {
+        unsigned char c = static_cast<unsigned char>(r[i]);
+        if (c >= 'A' && c <= 'Z')
+            r[i] = static_cast<char>(c - 'A' + 'a');
+    }
+    return r;
+}
+
+static bool parseDecSizeT(const std::string& s, size_t& out)
+{
+    if (s.empty()) return false;
+    size_t v = 0;
+    for (size_t i = 0; i < s.size(); ++i)
+    {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < '0' || c > '9')
+            return false;
+        size_t nv = v * 10 + (c - '0');
+        if (nv < v) return false;
+        v = nv;
+    }
+    out = v;
+    return true;
+}
+
+static size_t find_mem(const char* hay, size_t hayLen,
+                       const char* needle, size_t needleLen,
+                       size_t start)
+{
+    if (!hay || !needle || needleLen == 0 || hayLen < needleLen ||
+        (hayLen >= needleLen && start > hayLen - needleLen))
+        return (size_t)-1;
+
+    for (size_t i = start; i + needleLen <= hayLen; ++i)
+    {
+        if (std::memcmp(hay + i, needle, needleLen) == 0)
+            return i;
+    }
+    return (size_t)-1;
+}
+
+static std::string trimSpaces(const std::string& s)
+{
+    size_t a = 0;
+    while (a < s.size() && (s[a] == ' ' || s[a] == '\t')) a++;
+    size_t b = s.size();
+    while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t')) b--;
+    return s.substr(a, b - a);
+}
+
+static bool headerValueCI(const std::string& headerBlock,
+                          const std::string& keyLower,
+                          std::string& outVal)
+{
+    size_t pos = 0;
+    while (pos < headerBlock.size())
+    {
+        size_t eol = headerBlock.find("\r\n", pos);
+        if (eol == std::string::npos)
+            break;
+
+        std::string line = headerBlock.substr(pos, eol - pos);
+        pos = eol + 2;
+
+        size_t colon = line.find(':');
+        if (colon == std::string::npos)
+            continue;
+
+        std::string k = line.substr(0, colon);
+        k = asciiLower(k);
+
+        if (k == keyLower)
+        {
+            std::string v = line.substr(colon + 1);
+            outVal = trimSpaces(v);
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool extractBoundary(const std::string& contentType, std::string& outBoundary)
+{
+    std::string low = asciiLower(contentType);
+
+    if (low.find("multipart/form-data") == std::string::npos)
+        return false;
+
+    size_t bpos = low.find("boundary=");
+    if (bpos == std::string::npos)
+        return false;
+
+    std::string b = contentType.substr(bpos + 9);
+    b = trimSpaces(b);
+    if (b.empty())
+        return false;
+
+    if (b.size() >= 2 && b[0] == '"' && b[b.size() - 1] == '"')
+        b = b.substr(1, b.size() - 2);
+
+    if (b.empty())
+        return false;
+
+    outBoundary = b;
+    return true;
+}
+
+static bool parseFilenameFromDisposition(const std::string& disp, std::string& outName)
+{
+    size_t p = disp.find("filename=");
+    if (p == std::string::npos)
+        return false;
+
+    p += 9;
+    if (p >= disp.size())
+        return false;
+
+    if (disp[p] == '"')
+    {
+        size_t q = disp.find('"', p + 1);
+        if (q == std::string::npos)
+            return false;
+        outName = disp.substr(p + 1, q - (p + 1));
+        return !outName.empty();
+    }
+
+    size_t end = disp.find(';', p);
+    if (end == std::string::npos)
+        end = disp.size();
+    outName = trimSpaces(disp.substr(p, end - p));
+    return !outName.empty();
+}
+
+static bool cgiTimedOut(const CgiSession& cg)
+{
+    if (!cg.active) return false;
+    if (cg.timeoutSec <= 0) return false;
+    std::time_t now = std::time(NULL);
+    return (now - cg.startTs) >= cg.timeoutSec;
 }
 
 PollReactor::PollReactor(const std::vector<int>& ports,
@@ -70,6 +216,7 @@ PollReactor::~PollReactor()
     for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
     {
         cleanupCgiForClient(it->second);
+        cleanupUploadForClient(it->second);
         closeFd(it->first);
     }
     _channels.clear();
@@ -188,7 +335,6 @@ void PollReactor::cleanupCgiForClient(NetChannel& ch)
     if (!cg.active)
         return;
 
-    // remove poll items for CGI fds
     if (cg.fdOut >= 0)
     {
         removePollItem(cg.fdOut);
@@ -213,16 +359,39 @@ void PollReactor::cleanupCgiForClient(NetChannel& ch)
     cg.active = false;
 }
 
+void PollReactor::cleanupUploadForClient(NetChannel& ch)
+{
+    NetChannel::UploadSession& up = ch.upload();
+    if (!up.active)
+        return;
+
+    if (up.fd >= 0)
+    {
+        closeFd(up.fd);
+        up.fd = -1;
+    }
+    up.active = false;
+    up.raw.clear();
+    up.dataStart = 0;
+    up.dataEnd = 0;
+    up.off = 0;
+}
+
 void PollReactor::flushDrops()
 {
     for (std::set<int>::iterator it = _toDrop.begin(); it != _toDrop.end(); ++it)
     {
         int fd = *it;
+        
 
         std::map<int, NetChannel>::iterator chIt = _channels.find(fd);
         if (chIt != _channels.end())
         {
+          
+
+            
             cleanupCgiForClient(chIt->second);
+            cleanupUploadForClient(chIt->second);
         }
 
         removePollItem(fd);
@@ -267,35 +436,6 @@ std::string::size_type PollReactor::findHdrEnd(const std::string& buf)
     return buf.find("\r\n\r\n");
 }
 
-static std::string asciiLower(const std::string& s)
-{
-    std::string r = s;
-    for (size_t i = 0; i < r.size(); ++i)
-    {
-        unsigned char c = static_cast<unsigned char>(r[i]);
-        if (c >= 'A' && c <= 'Z')
-            r[i] = static_cast<char>(c - 'A' + 'a');
-    }
-    return r;
-}
-
-static bool parseDecSizeT(const std::string& s, size_t& out)
-{
-    if (s.empty()) return false;
-    size_t v = 0;
-    for (size_t i = 0; i < s.size(); ++i)
-    {
-        unsigned char c = static_cast<unsigned char>(s[i]);
-        if (c < '0' || c > '9')
-            return false;
-        size_t nv = v * 10 + (c - '0');
-        if (nv < v) return false;
-        v = nv;
-    }
-    out = v;
-    return true;
-}
-
 bool PollReactor::parseFramingHeaders(const std::string& headerBlock,
                                       bool& outChunked,
                                       bool& outHasLen,
@@ -311,6 +451,7 @@ bool PollReactor::parseFramingHeaders(const std::string& headerBlock,
         size_t eol = headerBlock.find("\r\n", pos);
         if (eol == std::string::npos)
             break;
+
         std::string line = headerBlock.substr(pos, eol - pos);
         pos = eol + 2;
 
@@ -342,12 +483,250 @@ bool PollReactor::parseFramingHeaders(const std::string& headerBlock,
         }
     }
 
-    // your server refuses chunked (by design)
     if (outChunked)
         return false;
 
     return true;
 }
+
+std::string PollReactor::minimalError(int code, const char* reason)
+{
+    std::string body = reason;
+    body += "\n";
+
+    char line[128];
+    ::snprintf(line, sizeof(line), "HTTP/1.0 %d %s\r\n", code, reason);
+
+    char clen[128];
+    ::snprintf(clen, sizeof(clen), "Content-Length: %lu\r\n",
+               (unsigned long)body.size());
+
+    std::string r;
+    r += line;
+    r += "Content-Type: text/plain\r\n";
+    r += clen;
+    r += "Connection: close\r\n";
+    r += "\r\n";
+    r += body;
+    return r;
+}
+
+bool PollReactor::tryStartAsyncUpload(NetChannel& ch, std::string& msg)
+{
+
+    const size_t THRESH = 5 * 1024 * 1024; // 5MB
+
+    size_t he = msg.find("\r\n\r\n");
+    if (he == std::string::npos)
+        return false;
+
+    size_t sp1 = msg.find(' ');
+    if (sp1 == std::string::npos) return false;
+    std::string method = msg.substr(0, sp1);
+    if (method != "POST")
+        return false;
+
+    size_t sp2 = msg.find(' ', sp1 + 1);
+    if (sp2 == std::string::npos) return false;
+    std::string uri = msg.substr(sp1 + 1, sp2 - (sp1 + 1));
+
+    std::string headerBlock = msg.substr(0, he + 2);
+    std::string cl;
+    if (!headerValueCI(headerBlock, "content-length", cl))
+        return false;
+
+    size_t contentLen = 0;
+    if (!parseDecSizeT(cl, contentLen))
+        return false;
+
+    if (contentLen < THRESH)
+        return false;
+
+    size_t dataStart = 0;
+    size_t dataEnd = 0;
+    std::string mpFilename;
+
+    std::string ct;
+    bool isMultipart = false;
+    std::string boundary;
+
+    if (headerValueCI(headerBlock, "content-type", ct) && extractBoundary(ct, boundary))
+        isMultipart = true;
+
+    if (!isMultipart)
+    {
+        dataStart = he + 4;
+        dataEnd = msg.size();
+    }
+    else
+    {
+        const char* b = msg.data();
+        size_t blen = msg.size();
+
+        std::string delim = "--" + boundary;
+        std::string nextDelim = "\r\n" + delim;
+
+        size_t p0 = find_mem(b, blen, delim.c_str(), delim.size(), he + 4);
+        if (p0 == (size_t)-1) return false;
+
+        size_t p = find_mem(b, blen, "\r\n", 2, p0);
+        if (p == (size_t)-1) return false;
+        p += 2;
+
+        size_t hdrEnd = find_mem(b, blen, "\r\n\r\n", 4, p);
+        if (hdrEnd == (size_t)-1) return false;
+
+        std::string partHeaders(b + p, hdrEnd - p);
+
+        std::string cdLine;
+        {
+            std::string low = asciiLower(partHeaders);
+            size_t cd = low.find("content-disposition:");
+            if (cd != std::string::npos)
+            {
+                size_t eol = partHeaders.find("\r\n", cd);
+                if (eol == std::string::npos) eol = partHeaders.size();
+                cdLine = partHeaders.substr(cd, eol - cd);
+            }
+        }
+        if (!cdLine.empty())
+            parseFilenameFromDisposition(cdLine, mpFilename);
+
+        dataStart = hdrEnd + 4;
+
+        size_t p1 = find_mem(b, blen, nextDelim.c_str(), nextDelim.size(), dataStart);
+        if (p1 == (size_t)-1) return false;
+
+        dataEnd = p1;
+        if (dataEnd < dataStart) return false;
+    }
+
+    RouterByteHandler* rb = dynamic_cast<RouterByteHandler*>(_handler);
+    if (!rb)
+        return false;
+
+    int outFd = -1;
+    std::string errBytes;
+    if (!rb->planUploadFd(ch.acceptFd(), uri, mpFilename, outFd, errBytes))
+        return false;
+
+    if (outFd < 0)
+    {
+        ch.txBuffer() = errBytes.empty()
+            ? minimalError(500, "Internal Server Error")
+            : errBytes;
+        ch.setCloseOnDone(true);
+        ch.setPhase(PHASE_SEND);
+        setPollMask(ch.sockFd(), POLLIN | POLLOUT);
+        return true;
+    }
+
+    NetChannel::UploadSession& up = ch.upload();
+    up.active = true;
+    up.fd = outFd;
+    up.raw.swap(msg);
+    up.dataStart = dataStart;
+    up.dataEnd = dataEnd;
+    up.off = 0;
+
+    ch.setInFlight(true);
+
+    setPollMask(ch.sockFd(), 0);
+    return true;
+}
+
+
+void PollReactor::pumpAsyncUploads()
+{
+    const size_t CHUNK = 1024 * 1024;
+    const int MAX_WRITES_PER_TICK = 10;
+
+    for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
+    {
+        NetChannel& ch = it->second;
+        NetChannel::UploadSession& up = ch.upload();
+        if (!up.active)
+            continue;
+
+        size_t total = (up.dataEnd > up.dataStart) ? (up.dataEnd - up.dataStart) : 0;
+        if (up.off >= total)
+        {
+            // done
+            closeFd(up.fd);
+            up.fd = -1;
+            up.active = false;
+            up.raw.clear();
+            ch.setInFlight(false);
+
+            std::string body = "201 Created: File uploaded successfully.\n";
+            char head[256];
+            ::snprintf(head, sizeof(head),
+                       "HTTP/1.0 201 Created\r\n"
+                       "Connection: close\r\n"
+                       "Content-Length: %lu\r\n"
+                       "Content-Type: text/plain\r\n"
+                       "\r\n",
+                       (unsigned long)body.size());
+
+            ch.txBuffer() = std::string(head) + body;
+            ch.setCloseOnDone(true);
+            ch.setPhase(PHASE_SEND);
+            setPollMask(ch.sockFd(), POLLIN | POLLOUT);
+            continue;
+        }
+
+        int writes_this_tick = 0;
+        while (writes_this_tick < MAX_WRITES_PER_TICK && up.off < total)
+        {
+            size_t left = total - up.off;
+            size_t nwrite = (left > CHUNK) ? CHUNK : left;
+
+            const char* data = up.raw.data() + up.dataStart + up.off;
+            ssize_t n = write(up.fd, data, nwrite);
+
+            if (n > 0)
+            {
+                up.off += (size_t)n;
+                writes_this_tick++;
+                
+                
+                continue;
+            }
+
+            if (n < 0)
+            {
+                int err = errno;
+                
+                if (err == EAGAIN || err == EWOULDBLOCK)
+                {
+                    break;
+                }
+
+                if (err == EINTR)
+                {
+                    continue;
+                }
+
+                // Real failure
+                closeFd(up.fd);
+                up.fd = -1;
+                up.active = false;
+                up.raw.clear();
+                ch.setInFlight(false);
+
+                ch.txBuffer() = minimalError(500, "Internal Server Error");
+                ch.setCloseOnDone(true);
+                ch.setPhase(PHASE_SEND);
+                setPollMask(ch.sockFd(), POLLIN | POLLOUT);
+                break;
+            }
+
+            break;
+        }
+    }
+}
+
+
 
 void PollReactor::dispatchIfIdle(NetChannel& ch)
 {
@@ -360,7 +739,7 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
 
     std::string msg = ch.popReadyMsg();
 
-    // If handler supports async CGI: try start CGI first
+    // Try async CGI first
     ICgiHandler* cgiH = dynamic_cast<ICgiHandler*>(_handler);
     if (cgiH)
     {
@@ -376,7 +755,6 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
                 return;
             }
 
-            // Setup CGI session
             CgiSession& cg = ch.cgi();
             cg.active = true;
             cg.pid = st.pid;
@@ -396,7 +774,6 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
                 addPollItem(cg.fdIn, POLLOUT);
             else
             {
-                // nothing to write: close stdin immediately
                 removePollItem(cg.fdIn);
                 _cgiInToClient.erase(cg.fdIn);
                 closeFd(cg.fdIn);
@@ -404,13 +781,16 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
             }
 
             ch.setInFlight(true);
-            // keep client in POLLIN to detect hangup; do not read new requests while CGI in-flight
             setPollMask(ch.sockFd(), POLLIN);
             return;
         }
     }
 
-    // Normal non-CGI: handle synchronously (fast)
+    // Try async upload
+    if (tryStartAsyncUpload(ch, msg))
+        return;
+
+    // Normal sync request
     ch.setInFlight(true);
     ByteReply rep = _handler->handleBytes(ch.acceptFd(), msg);
     ch.setInFlight(false);
@@ -421,27 +801,6 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
     setPollMask(ch.sockFd(), POLLIN | POLLOUT);
 }
 
-std::string PollReactor::minimalError(int code, const char* reason)
-{
-    std::string body = reason;
-    body += "\n";
-
-    char line[128];
-    ::snprintf(line, sizeof(line), "HTTP/1.0 %d %s\r\n", code, reason);
-
-    char clen[128];
-    ::snprintf(clen, sizeof(clen), "Content-Length: %lu\r\n", (unsigned long)body.size());
-
-    std::string r;
-    r += line;
-    r += "Content-Type: text/plain\r\n";
-    r += clen;
-    r += "Connection: close\r\n";
-    r += "\r\n";
-    r += body;
-    return r;
-}
-
 void PollReactor::onReadable(int fd)
 {
     std::map<int, NetChannel>::iterator it = _channels.find(fd);
@@ -450,7 +809,13 @@ void PollReactor::onReadable(int fd)
 
     NetChannel& ch = it->second;
 
-    // if CGI is running, we do not accept pipelined requests; only detect disconnect
+     if (ch.inFlight() && ch.upload().active)
+    {
+
+        ch.setCloseOnDone(true);
+        setPollMask(fd, 0);
+        return;
+    }
     if (ch.cgi().active)
     {
         char tmp[1];
@@ -470,6 +835,8 @@ void PollReactor::onReadable(int fd)
     {
         ch.rxBuffer().append(buf, n);
         ch.markSeen();
+        if (ch.phase() == PHASE_RECV_BODY)
+            ch.markPhaseSince();
 
         if (ch.phase() == PHASE_RECV_HEADERS && ch.rxBuffer().size() > _maxHeaderBytes)
         {
@@ -546,8 +913,8 @@ void PollReactor::onReadable(int fd)
                     return;
                 }
 
-                std::string full = ch.rxBuffer().substr(0, need);
-                ch.rxBuffer().erase(0, need);
+                std::string full;
+                full.swap(ch.rxBuffer()); // O(1)
 
                 ch.resetFraming();
                 ch.setPhase(PHASE_RECV_HEADERS);
@@ -615,10 +982,10 @@ void PollReactor::onWritable(int fd)
 
         ch.setPhase(PHASE_RECV_HEADERS);
         setPollMask(fd, POLLIN);
-
         dispatchIfIdle(ch);
     }
 }
+
 
 void PollReactor::onCgiInWritable(int fd)
 {
@@ -638,7 +1005,6 @@ void PollReactor::onCgiInWritable(int fd)
 
     if (cg.inOff >= cg.inBody.size())
     {
-        // Finished writing body: close stdin to CGI
         removePollItem(fd);
         _cgiInToClient.erase(fd);
         closeFd(fd);
@@ -647,7 +1013,7 @@ void PollReactor::onCgiInWritable(int fd)
     }
 
     const char* data = cg.inBody.data() + cg.inOff;
-    size_t      left = cg.inBody.size() - cg.inOff;
+    size_t left = cg.inBody.size() - cg.inOff;
 
     ssize_t n = write(fd, data, left);
     if (n > 0)
@@ -655,7 +1021,6 @@ void PollReactor::onCgiInWritable(int fd)
         cg.inOff += (size_t)n;
         if (cg.inOff >= cg.inBody.size())
         {
-            // Done -> close stdin
             removePollItem(fd);
             _cgiInToClient.erase(fd);
             closeFd(fd);
@@ -669,7 +1034,6 @@ void PollReactor::onCgiInWritable(int fd)
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
             return;
 
-        // Hard failure writing to CGI stdin
         cleanupCgiForClient(ch);
         ch.setInFlight(false);
 
@@ -679,14 +1043,6 @@ void PollReactor::onCgiInWritable(int fd)
         setPollMask(ch.sockFd(), POLLIN | POLLOUT);
         return;
     }
-}
-
-static bool cgiTimedOut(const CgiSession& cg)
-{
-    if (!cg.active) return false;
-    if (cg.timeoutSec <= 0) return false;
-    std::time_t now = std::time(NULL);
-    return (now - cg.startTs) >= cg.timeoutSec;
 }
 
 void PollReactor::maybeFinalizeCgi(int clientFd)
@@ -700,10 +1056,8 @@ void PollReactor::maybeFinalizeCgi(int clientFd)
     if (!cg.active)
         return;
 
-    // timeout handling
     if (cgiTimedOut(cg))
     {
-        // Kill CGI and reply 504
         cleanupCgiForClient(ch);
         ch.setInFlight(false);
 
@@ -714,7 +1068,6 @@ void PollReactor::maybeFinalizeCgi(int clientFd)
         return;
     }
 
-    // check if child exited (non-blocking)
     bool exited = false;
     int status = 0;
     if (cg.pid > 0)
@@ -726,18 +1079,12 @@ void PollReactor::maybeFinalizeCgi(int clientFd)
     else
         exited = true;
 
-    // We finalize only when:
-    // - stdout fd is closed (cg.fdOut == -1)
-    // - stdin is closed or not needed (cg.fdIn == -1)
-    // - child exited
     if (!(exited && cg.fdOut == -1 && cg.fdIn == -1))
         return;
 
-    // Build response using handler
     ICgiHandler* cgiH = dynamic_cast<ICgiHandler*>(_handler);
     if (!cgiH)
     {
-        // Should never happen if we started CGI via ICgiHandler
         cleanupCgiForClient(ch);
         ch.setInFlight(false);
 
@@ -750,7 +1097,6 @@ void PollReactor::maybeFinalizeCgi(int clientFd)
 
     CgiFinishResult fin = cgiH->finishCgi(ch.acceptFd(), ch.sockFd(), cg.outBuf);
 
-    // cleanup CGI state (already done fds, but ensure it)
     cg.active = false;
     cg.pid = -1;
     cg.inBody.clear();
@@ -773,7 +1119,6 @@ void PollReactor::onCgiOutReadable(int fd)
     std::map<int, NetChannel>::iterator chIt = _channels.find(clientFd);
     if (chIt == _channels.end())
     {
-        // no client anymore => just close fd
         removePollItem(fd);
         _cgiOutToClient.erase(fd);
         closeFd(fd);
@@ -790,28 +1135,23 @@ void PollReactor::onCgiOutReadable(int fd)
     if (n > 0)
     {
         cg.outBuf.append(buf, buf + n);
-        // keep reading later
         return;
     }
 
     if (n == 0)
     {
-        // EOF: close stdout
         removePollItem(fd);
         _cgiOutToClient.erase(fd);
         closeFd(fd);
         cg.fdOut = -1;
 
-        // maybe we can finish now
         maybeFinalizeCgi(clientFd);
         return;
     }
 
-    // n < 0
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
         return;
 
-    // Hard failure reading CGI output
     cleanupCgiForClient(ch);
     ch.setInFlight(false);
 
@@ -837,7 +1177,6 @@ void PollReactor::onPollEvent(size_t idx)
     {
         if (re & (POLLERR | POLLNVAL | POLLHUP))
         {
-            // treat as write failure -> cleanup that client CGI
             int clientFd = _cgiInToClient[fd];
             std::map<int, NetChannel>::iterator chIt = _channels.find(clientFd);
             if (chIt != _channels.end())
@@ -867,13 +1206,19 @@ void PollReactor::onPollEvent(size_t idx)
     }
 
     const bool hup = (re & POLLHUP) != 0;
-
     if (hup && !isListener(fd))
     {
         std::map<int, NetChannel>::iterator it = _channels.find(fd);
         if (it != _channels.end())
         {
             NetChannel& ch = it->second;
+            
+            if (ch.upload().active)
+            {
+
+                return;
+            }
+            
             ch.setCloseOnDone(true);
 
             if (ch.phase() == PHASE_SEND || !ch.txBuffer().empty())
@@ -908,6 +1253,11 @@ void PollReactor::sweepTimeouts()
         int fd = it->first;
         NetChannel& ch = it->second;
 
+        if (ch.upload().active)
+        {
+            continue;
+        }
+
         // CGI timeout
         if (ch.cgi().active)
         {
@@ -929,6 +1279,7 @@ void PollReactor::sweepTimeouts()
             markDrop(fd);
             continue;
         }
+
         if (ch.inFlight())
             continue;
 
@@ -953,7 +1304,7 @@ void PollReactor::tickOnce()
     if (_pollSet.empty())
         return;
 
-    int ret = poll(&_pollSet[0], _pollSet.size(), 1000);
+    int ret = poll(&_pollSet[0], _pollSet.size(), 0);
     if (ret < 0)
     {
         if (errno == EINTR)
@@ -972,14 +1323,15 @@ void PollReactor::tickOnce()
         }
     }
 
-    // After polling, finalize any CGI that completed without more fd events
-    // (for example: child exits after stdout already closed)
+    // finalize CGI possibly without more fd events
     for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
     {
         NetChannel& ch = it->second;
         if (ch.cgi().active)
             maybeFinalizeCgi(it->first);
     }
+
+    pumpAsyncUploads();
 
     flushDrops();
     sweepTimeouts();

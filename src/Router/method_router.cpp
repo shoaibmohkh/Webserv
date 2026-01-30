@@ -1,3 +1,4 @@
+
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
@@ -13,6 +14,7 @@
 #include "../../include/Router_headers/Router.hpp"
 
 #include <sys/stat.h>
+#include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
 #include <cerrno>
@@ -109,10 +111,26 @@ static bool parseFilenameFromDisposition(const std::string& disp, std::string& o
     return !outName.empty();
 }
 
-static bool extractMultipartFile(const std::map<std::string, std::string>& headers,
-                                 const std::vector<char>& body,
-                                 std::string& outFilename,
-                                 std::vector<char>& outFileBytes)
+static size_t find_mem(const char* hay, size_t hayLen,
+                       const char* needle, size_t needleLen,
+                       size_t start)
+{
+    if (!hay || !needle || needleLen == 0 || hayLen < needleLen || start > hayLen - needleLen)
+        return (size_t)-1;
+
+    for (size_t i = start; i + needleLen <= hayLen; ++i)
+    {
+        if (std::memcmp(hay + i, needle, needleLen) == 0)
+            return i;
+    }
+    return (size_t)-1;
+}
+
+static bool extractMultipartFileSpan(const std::map<std::string, std::string>& headers,
+                                     const std::vector<char>& body,
+                                     std::string& outFilename,
+                                     size_t& outStart,
+                                     size_t& outEnd)
 {
     std::string ct;
     if (!getHeaderCI(headers, "content-type", ct))
@@ -125,29 +143,29 @@ static bool extractMultipartFile(const std::map<std::string, std::string>& heade
     if (body.empty())
         return false;
 
-    // body can contain '\0', keep size
-    std::string b(&body[0], body.size());
+    const char* b = &body[0];
+    size_t blen = body.size();
 
     std::string delim = "--" + boundary;
     std::string nextDelim = "\r\n" + delim;
 
     // Find first boundary
-    size_t p0 = b.find(delim);
-    if (p0 == std::string::npos)
+    size_t p0 = find_mem(b, blen, delim.c_str(), delim.size(), 0);
+    if (p0 == (size_t)-1)
         return false;
 
     // Move to end of boundary line
-    size_t p = b.find("\r\n", p0);
-    if (p == std::string::npos)
+    size_t p = find_mem(b, blen, "\r\n", 2, p0);
+    if (p == (size_t)-1)
         return false;
     p += 2; // start of part headers
 
     // Find end of part headers
-    size_t hdrEnd = b.find("\r\n\r\n", p);
-    if (hdrEnd == std::string::npos)
+    size_t hdrEnd = find_mem(b, blen, "\r\n\r\n", 4, p);
+    if (hdrEnd == (size_t)-1)
         return false;
 
-    std::string partHeaders = b.substr(p, hdrEnd - p);
+    std::string partHeaders(b + p, hdrEnd - p);
 
     // Get Content-Disposition line
     std::string cdLine;
@@ -174,16 +192,17 @@ static bool extractMultipartFile(const std::map<std::string, std::string>& heade
     size_t dataStart = hdrEnd + 4;
 
     // Find next boundary (preceded by \r\n)
-    size_t p1 = b.find(nextDelim, dataStart);
-    if (p1 == std::string::npos)
+    size_t p1 = find_mem(b, blen, nextDelim.c_str(), nextDelim.size(), dataStart);
+    if (p1 == (size_t)-1)
         return false;
 
     size_t dataEnd = p1; // bytes end right before "\r\n--boundary"
     if (dataEnd < dataStart)
         return false;
 
-    outFileBytes.assign(b.begin() + dataStart, b.begin() + dataEnd);
     outFilename = fname;
+    outStart = dataStart;
+    outEnd = dataEnd;
     return true;
 }
 
@@ -260,9 +279,9 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
         return response;
     }
 
-    /* ---- choose file bytes: raw body OR multipart extracted bytes ---- */
-    std::vector<char> fileBytes;
     std::string mpFilename;
+    size_t mpStart = 0;
+    size_t mpEnd = 0;
 
     bool isMultipart = false;
     {
@@ -277,7 +296,7 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
 
     if (isMultipart)
     {
-        if (!extractMultipartFile(request.headers, request.body, mpFilename, fileBytes))
+        if (!extractMultipartFileSpan(request.headers, request.body, mpFilename, mpStart, mpEnd))
         {
             response.status_code = 400;
             response.reason_phrase = "Bad Request";
@@ -286,10 +305,6 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
             response.headers["Content-Type"] = "text/plain";
             return response;
         }
-    }
-    else
-    {
-        fileBytes = request.body; // raw upload
     }
 
     /* ---- choose filename: URL name OR multipart filename OR fallback ---- */
@@ -318,15 +333,45 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
         return response;
     }
 
-    const char* data = fileBytes.empty() ? NULL : &fileBytes[0];
-    size_t total = fileBytes.size();
+    const char* data = NULL;
+    size_t total = 0;
+
+    if (isMultipart)
+    {
+        if (request.body.empty() || mpEnd < mpStart || mpEnd > request.body.size())
+        {
+            close(fd);
+            response.status_code = 400;
+            response.reason_phrase = "Bad Request";
+            response.set_body("400 Bad Request: Invalid multipart boundaries.");
+            response.headers["Content-Length"] = to_string(response.body.size());
+            response.headers["Content-Type"] = "text/plain";
+            return response;
+        }
+        data = &request.body[0] + mpStart;
+        total = mpEnd - mpStart;
+    }
+    else
+    {
+        if (!request.body.empty())
+            data = &request.body[0];
+        total = request.body.size();
+    }
+
     size_t off = 0;
 
     while (off < total)
     {
-        ssize_t n = write(fd, data + off, total - off);
+        size_t chunk = total - off;
+        if (chunk > 64 * 1024)
+            chunk = 64 * 1024;
+
+        ssize_t n = write(fd, data + off, chunk);
         if (n < 0)
         {
+            if (errno == EINTR)
+                continue;
+
             close(fd);
             response.status_code = 500;
             response.reason_phrase = "Internal Server Error";
@@ -335,6 +380,8 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
             response.headers["Content-Type"] = "text/plain";
             return response;
         }
+        if (n == 0)
+            break;
         off += static_cast<size_t>(n);
     }
 

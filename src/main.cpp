@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*   By: ikhalil <ikhalil@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 11:19:17 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/01/29 16:13:56 by sal-kawa         ###   ########.fr       */
+/*   Updated: 2026/01/29 22:26:41 by ikhalil          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,8 +27,8 @@
 #define DEFAULT_IDLE_TIMEOUT 30
 #define DEFAULT_HEADER_TIMEOUT 10
 #define DEFAULT_BODY_TIMEOUT 20
-#define DEFAULT_MAX_HEADER_BYTES (16 * 1024)
-#define DEFAULT_MAX_BODY_BYTES (1024ul * 1024ul * 1024ul)
+#define DEFAULT_MAX_HEADER_BYTES (17 * 1024)
+#define DEFAULT_MAX_BODY_BYTES (1024ul * 1024ul * 1024ul + 1024ul * 1024ul)
 
 static volatile sig_atomic_t g_stop = 0;
 

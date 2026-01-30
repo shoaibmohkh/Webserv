@@ -25,6 +25,11 @@ public:
 
     virtual CgiStartResult tryStartCgi(int acceptFd, const std::string& rawMessage);
     virtual CgiFinishResult finishCgi(int acceptFd, int clientFd, const std::string& cgiStdout);
+    bool planUploadFd(int acceptFd,
+                  const std::string& uri,
+                  const std::string& mpFilename,
+                  int& outFd,
+                  std::string& outErrBytes);
 };
 
 #endif

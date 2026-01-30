@@ -4,7 +4,7 @@
 #include <string>
 #include <deque>
 #include <ctime>
-#include <sys/types.h>
+#include <sys/types.h> // pid_t
 
 enum IoPhase
 {
@@ -38,6 +38,22 @@ struct CgiSession
 
 class NetChannel
 {
+public:
+    // ✅ nested type because PollReactor uses NetChannel::UploadSession
+    struct UploadSession
+    {
+        bool        active;
+        int         fd;
+        std::string raw;        // full HTTP request (store it to avoid copies)
+        size_t      dataStart;  // file bytes start offset in raw
+        size_t      dataEnd;    // file bytes end offset in raw
+        size_t      off;        // bytes already written
+
+        UploadSession()
+        : active(false), fd(-1), raw(), dataStart(0), dataEnd(0), off(0)
+        {}
+    };
+
 public:
     NetChannel();
     NetChannel(int sockFd, int acceptFd);
@@ -73,9 +89,9 @@ public:
     void setLen(size_t n);
 
     bool hasReadyMsg() const;
-    std::string popReadyMsg();
-    void pushReadyMsg(const std::string& msg);
-
+std::string popReadyMsg();
+void        pushReadyMsg(std::string& msg);          // ✅ MUST EXIST
+void        pushReadyMsg(const std::string& msg);  
     bool closeOnDone() const;
     void setCloseOnDone(bool v);
 
@@ -83,6 +99,9 @@ public:
     void setInFlight(bool v);
 
     CgiSession& cgi();
+
+    // ✅ accessor for async upload
+    UploadSession& upload();
 
 private:
     int _sockFd;
@@ -109,6 +128,9 @@ private:
     bool _inFlight;
 
     CgiSession _cgi;
+
+    // ✅ correct place for upload session
+    UploadSession _upload;
 };
 
 #endif

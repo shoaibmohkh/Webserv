@@ -50,7 +50,6 @@ private:
     void onCgiInWritable(int fd);
 
     void sweepTimeouts();
-
     void maybeFinalizeCgi(int clientFd);
 
     std::string::size_type findHdrEnd(const std::string& buf);
@@ -60,12 +59,17 @@ private:
                              bool& outHasLen,
                              size_t& outLen);
 
-
     std::string minimalError(int code, const char* reason);
 
     void dispatchIfIdle(NetChannel& ch);
 
     void cleanupCgiForClient(NetChannel& ch);
+
+    /* -------------------- ASYNC UPLOAD SUPPORT -------------------- */
+    bool tryStartAsyncUpload(NetChannel& ch, std::string& msg);
+    void pumpAsyncUploads();
+    void cleanupUploadForClient(NetChannel& ch);
+    /* -------------------------------------------------------------- */
 
 private:
     std::vector<int> _listenSockets;
@@ -90,4 +94,3 @@ private:
 };
 
 #endif
-
