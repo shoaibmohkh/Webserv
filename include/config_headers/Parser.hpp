@@ -36,6 +36,8 @@ class Parser {
         int                    cgi_extension_parse(int &_pos, LocationConfig &locConfig);
         int                    allow_methods_parse(int &_pos, LocationConfig &locConfig);  
         int                    error_page_parse(int &_pos, ServerConfig &serverConfig);
+        void error_duplicate_port(int port, int line);
+
     public:
         Parser(const std::vector<Token>& tokens);
         ~Parser();

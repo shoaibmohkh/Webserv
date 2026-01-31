@@ -52,7 +52,8 @@ class LocationConfig {
 
 class ServerConfig {
     public:
-        int                                      port;                 // Port to listen on (8080)
+        int                                      port; 
+        int                                      listen_line;                // Port to listen on (8080)
         int                                      client_Max_Body_Size; // Max body size (1000000)
         std::string                              root;                 // Document root (./www)
         std::string                              index;                // Index file (index.html)
@@ -60,7 +61,7 @@ class ServerConfig {
         std::map<int, std::string>               error_Pages;          // Error pages (404, /errors/404.html)
         std::vector<LocationConfig>              locations;            // Location configurations
 
-        ServerConfig() : port(80), client_Max_Body_Size(0), root("./www"), index("index.html"), server_name("default") {}
+        ServerConfig() : port(80), listen_line(-1), client_Max_Body_Size(0), root("./www"), index("index.html"), server_name("default") {}
 };
 
 // server {

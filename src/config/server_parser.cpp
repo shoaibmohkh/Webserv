@@ -24,8 +24,11 @@ int Parser::port_and_clientMaxBodySize_parse(int &_pos, ServerConfig &serverConf
     {
         if (_tokens[_pos - 1].value == "client_max_body_size")
             serverConfig.client_Max_Body_Size = atoi(_tokens[_pos].value.c_str());
-        else if (_tokens[_pos - 1].value == "listen")
-            serverConfig.port = atoi(_tokens[_pos].value.c_str());
+       else if (_tokens[_pos - 1].value == "listen")
+{
+    serverConfig.port = atoi(_tokens[_pos].value.c_str());
+    serverConfig.listen_line = _tokens[_pos].line;  // <-- add this
+}
         _pos++;
         if (_tokens[_pos].type == SEMICOLON)
             _pos++;
