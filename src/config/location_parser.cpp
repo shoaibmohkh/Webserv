@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   location_parser.cpp                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/14 12:03:24 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2025/12/14 12:03:24 by eaqrabaw         ###   ########.fr       */
+/*   Created: 2026/02/01 16:36:23 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:36:23 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ikhalil <ikhalil@student.42.fr>            +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 11:19:17 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/01/29 22:26:41 by ikhalil          ###   ########.fr       */
+/*   Updated: 2026/02/01 16:40:41 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,12 +37,10 @@ static void onSignal(int) {
 }
 
 static size_t extractMaxBodyBytes(const Config& cfg) {
-    // Start with default
+
     size_t mx = DEFAULT_MAX_BODY_BYTES;
     for (size_t i = 0; i < cfg.servers.size(); ++i) {
-        // If your type is int/long, treat <=0 as "not set"
         long long v = (long long)cfg.servers[i].client_Max_Body_Size;
-        // Optional: if you want "0 means unlimited"
         if (v == 0) return 0;
         if (v > 0) {
             size_t sv = static_cast<size_t>(v);

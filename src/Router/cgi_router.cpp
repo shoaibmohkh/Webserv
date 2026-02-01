@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   cgi_router.cpp                                     :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:37:16 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:37:16 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../include/Router_headers/Router.hpp"
 
 #include <signal.h>
@@ -32,13 +44,14 @@ static void set_cloexec(int fd)
     fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
 }
 
-static int get_max_open_fd_from_proc()
+static void close_fds_from(int start_fd)
 {
     DIR* d = opendir("/proc/self/fd");
     if (!d)
-        return 1024;
+        return;
 
-    int maxfd = -1;
+    int dfd = dirfd(d);
+
     for (;;)
     {
         errno = 0;
@@ -51,24 +64,16 @@ static int get_max_open_fd_from_proc()
             continue;
 
         int fd = std::atoi(name);
-        if (fd > maxfd)
-            maxfd = fd;
-    }
-    closedir(d);
+        if (fd < start_fd)
+            continue;
 
-    if (maxfd < 0)
-        return 1024;
-    return maxfd + 1;
-}
+        if (fd == dfd)
+            continue;
 
-static void close_fds_from(int start_fd)
-{
-    int maxfd = get_max_open_fd_from_proc();
-    if (maxfd < start_fd)
-        return;
-
-    for (int fd = start_fd; fd < maxfd; ++fd)
         close(fd);
+    }
+
+    closedir(d);
 }
 
 bool Router::is_cgi_request(const LocationConfig& location_config, const std::string& fullpath) const
@@ -284,8 +289,6 @@ bool Router::spawn_cgi(const HTTPRequest& request,
         execve(interpreter.c_str(), &args[0], &envp[0]);
         _exit(1);
     }
-
-    // parent keeps: write-end of to_cgi, read-end of from_cgi
     close(pipe_to_cgi[0]);
     close(pipe_from_cgi[1]);
 

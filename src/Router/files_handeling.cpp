@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   files_handeling.cpp                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: marvin <marvin@student.42.fr>              +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/11 20:47:45 by marvin            #+#    #+#             */
-/*   Updated: 2025/12/11 20:47:45 by marvin           ###   ########.fr       */
+/*   Created: 2026/02/01 16:37:38 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:37:38 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -52,14 +52,14 @@ HTTPResponse Router::serve_static_file(const std::string& fullpath) const
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.set_body("404 Not Found");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
 
     std::vector<char> body;
     char buffer[8192];
-    ssize_t bytes_read = 0;
+    ssize_t bytes_read;
 
     while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0)
         body.insert(body.end(), buffer, buffer + bytes_read);
@@ -71,15 +71,15 @@ HTTPResponse Router::serve_static_file(const std::string& fullpath) const
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
         response.set_body("500 Internal Server Error");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
 
     response.status_code = 200;
     response.reason_phrase = "OK";
     response.set_body(body);
-    response.headers["Content-Length"] = to_string(response.body.size());
     response.headers["Content-Type"] = get_mime_type(fullpath);
+    response.headers["Content-Length"] = to_string(response.body.size());
     return response;
 }

@@ -5,10 +5,11 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/01/28 11:19:55 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/01/28 11:19:56 by sal-kawa         ###   ########.fr       */
+/*   Created: 2026/02/01 16:36:49 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:36:50 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
 
 #include "../../include/HTTP/http10/Http10Serializer.hpp"
 

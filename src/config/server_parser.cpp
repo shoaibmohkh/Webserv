@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   server_parser.cpp                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/14 12:03:44 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2025/12/14 12:03:44 by eaqrabaw         ###   ########.fr       */
+/*   Created: 2026/02/01 16:36:16 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:36:16 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,11 +24,11 @@ int Parser::port_and_clientMaxBodySize_parse(int &_pos, ServerConfig &serverConf
     {
         if (_tokens[_pos - 1].value == "client_max_body_size")
             serverConfig.client_Max_Body_Size = atoi(_tokens[_pos].value.c_str());
-       else if (_tokens[_pos - 1].value == "listen")
-{
-    serverConfig.port = atoi(_tokens[_pos].value.c_str());
-    serverConfig.listen_line = _tokens[_pos].line;  // <-- add this
-}
+        else if (_tokens[_pos - 1].value == "listen")
+        {
+            serverConfig.port = atoi(_tokens[_pos].value.c_str());
+            serverConfig.listen_line = _tokens[_pos].line;  // <-- add this
+        }
         _pos++;
         if (_tokens[_pos].type == SEMICOLON)
             _pos++;

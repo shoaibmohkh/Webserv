@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   RouterByteHandler.cpp                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: marvin <marvin@student.42.fr>              +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 11:17:45 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/01/30 22:20:59 by marvin           ###   ########.fr       */
+/*   Updated: 2026/02/01 16:39:03 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -134,8 +134,6 @@ RouterByteHandler::~RouterByteHandler()
 
 ByteReply RouterByteHandler::handleBytes(int acceptFd, const std::string& rawMessage)
 {
-    // NOTE: PollReactor will call tryStartCgi() first.
-    // handleBytes() is now for non-CGI requests only.
     HTTPRequest req;
     int err = 400;
     int listenPort = get_listen_port(acceptFd);
@@ -164,9 +162,7 @@ CgiStartResult RouterByteHandler::tryStartCgi(int acceptFd, const std::string& r
     int listenPort = get_listen_port(acceptFd);
 
     if (!http10::parseRequest(rawMessage, listenPort, req, err))
-        return out; // not CGI path; normal error handling stays in handleBytes()
-
-    // replicate Router routing normalization for CGI detection
+        return out;
     std::string decoded;
     if (!url_decode_path(req.uri, decoded))
         return out;
@@ -213,8 +209,6 @@ CgiFinishResult RouterByteHandler::finishCgi(int acceptFd, int /*clientFd*/, con
     CgiFinishResult r;
     (void)acceptFd;
 
-    // We don't re-route; CGI output already corresponds to the request path.
-    // parse CGI headers/body, serialize as HTTP/1.0 close.
     HTTPResponse res = _router->parse_cgi_response(cgiStdout);
 
     r.responseBytes = http10::serializeClose(res);
@@ -230,20 +224,18 @@ bool RouterByteHandler::planUploadFd(int acceptFd,
     outFd = -1;
     outErrBytes.clear();
 
-    // Only POST uploads route through this (reactor checks POST already)
     HTTPRequest req;
     req.uri = uri;
-    req.host = ""; // not needed unless you use name-based vhosts
+    req.host = "";
     req.version = "HTTP/1.0";
     req.port = get_listen_port(acceptFd);
     req.method = HTTP_POST;
 
-    // normalize like Router does
     std::string decoded;
     if (!url_decode_path(req.uri, decoded))
     {
         outErrBytes = http10::makeError(400, "Bad Request");
-        return true; // it is "upload attempt" but invalid
+        return true;
     }
 
     std::string norm;
@@ -256,7 +248,7 @@ bool RouterByteHandler::planUploadFd(int acceptFd,
     const ServerConfig& srv = _router->find_server_config(req);
     const LocationConfig* loc = _router->find_location_config(norm, srv);
     if (!loc)
-        return false; // not an upload location
+        return false;
 
     if (loc->uploadEnable == false)
     {
@@ -264,10 +256,8 @@ bool RouterByteHandler::planUploadFd(int acceptFd,
         return true;
     }
 
-    // Compute fullpath like Router does (used to derive filename from URL)
     std::string fullpath = _router->final_path(srv, *loc, norm);
 
-    // upload_store path
     std::string upload_path;
     if (!loc->uploadStore.empty() && loc->uploadStore[0] == '/')
         upload_path = loc->uploadStore;
@@ -284,7 +274,6 @@ bool RouterByteHandler::planUploadFd(int acceptFd,
         return true;
     }
 
-    // filename from URL or multipart
     std::string filename;
     size_t last_slash = fullpath.find_last_of('/');
     if (last_slash != std::string::npos && last_slash + 1 < fullpath.size())
@@ -304,8 +293,6 @@ bool RouterByteHandler::planUploadFd(int acceptFd,
         outErrBytes = http10::makeError(500, "Internal Server Error");
         return true;
     }
-
-    // ✅ Make file descriptor non-blocking
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags >= 0)
         fcntl(fd, F_SETFL, flags | O_NONBLOCK);

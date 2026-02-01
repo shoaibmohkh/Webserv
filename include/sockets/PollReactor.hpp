@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   PollReactor.hpp                                    :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:41:35 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:41:35 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #ifndef POLLREACTOR_HPP
 #define POLLREACTOR_HPP
 
@@ -45,7 +57,6 @@ private:
     void onReadable(int fd);
     void onWritable(int fd);
 
-    // CGI fds events
     void onCgiOutReadable(int fd);
     void onCgiInWritable(int fd);
 
@@ -65,11 +76,9 @@ private:
 
     void cleanupCgiForClient(NetChannel& ch);
 
-    /* -------------------- ASYNC UPLOAD SUPPORT -------------------- */
     bool tryStartAsyncUpload(NetChannel& ch, std::string& msg);
     void pumpAsyncUploads();
     void cleanupUploadForClient(NetChannel& ch);
-    /* -------------------------------------------------------------- */
 
 private:
     std::vector<int> _listenSockets;
@@ -86,7 +95,6 @@ private:
     std::map<int, NetChannel> _channels;
     std::set<int> _toDrop;
 
-    // maps CGI pipe fd -> client fd
     std::map<int, int> _cgiOutToClient;
     std::map<int, int> _cgiInToClient;
 

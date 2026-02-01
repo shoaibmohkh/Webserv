@@ -1,10 +1,22 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   NetChannel.hpp                                     :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:42:07 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:42:07 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #ifndef NETCHANNEL_HPP
 #define NETCHANNEL_HPP
 
 #include <string>
 #include <deque>
 #include <ctime>
-#include <sys/types.h> // pid_t
+#include <sys/types.h>
 
 enum IoPhase
 {
@@ -39,7 +51,6 @@ struct CgiSession
 class NetChannel
 {
 public:
-    // ✅ nested type because PollReactor uses NetChannel::UploadSession
     struct UploadSession
     {
         bool        active;
@@ -51,6 +62,18 @@ public:
 
         UploadSession()
         : active(false), fd(-1), raw(), dataStart(0), dataEnd(0), off(0)
+        {}
+    };
+
+    struct FileSendSession
+    {
+        bool        active;
+        int         fd;
+        std::string path;
+        size_t      off;
+
+        FileSendSession()
+        : active(false), fd(-1), path(), off(0)
         {}
     };
 
@@ -89,9 +112,10 @@ public:
     void setLen(size_t n);
 
     bool hasReadyMsg() const;
-std::string popReadyMsg();
-void        pushReadyMsg(std::string& msg);          // ✅ MUST EXIST
-void        pushReadyMsg(const std::string& msg);  
+    std::string popReadyMsg();
+    void        pushReadyMsg(std::string& msg);
+    void        pushReadyMsg(const std::string& msg);
+
     bool closeOnDone() const;
     void setCloseOnDone(bool v);
 
@@ -100,8 +124,10 @@ void        pushReadyMsg(const std::string& msg);
 
     CgiSession& cgi();
 
-    // ✅ accessor for async upload
     UploadSession& upload();
+
+    FileSendSession& file();
+    const FileSendSession& file() const;
 
 private:
     int _sockFd;
@@ -129,8 +155,9 @@ private:
 
     CgiSession _cgi;
 
-    // ✅ correct place for upload session
     UploadSession _upload;
+
+    FileSendSession _file;
 };
 
 #endif

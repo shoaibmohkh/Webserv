@@ -24,7 +24,6 @@
 #include <string>
 #include <vector>
 
-/* ------------------------ Multipart helpers ------------------------ */
 
 static bool getHeaderCI(const std::map<std::string, std::string>& h,
                         const std::string& keyLower,
@@ -56,7 +55,6 @@ static std::string trimSpaces(const std::string& s)
 
 static bool extractBoundary(const std::string& contentType, std::string& outBoundary)
 {
-    // expects: multipart/form-data; boundary=----XYZ (maybe quoted)
     std::string low = contentType;
     for (size_t i = 0; i < low.size(); ++i)
         if (low[i] >= 'A' && low[i] <= 'Z') low[i] = char(low[i] - 'A' + 'a');
@@ -73,7 +71,6 @@ static bool extractBoundary(const std::string& contentType, std::string& outBoun
     if (b.empty())
         return false;
 
-    // remove optional quotes
     if (b.size() >= 2 && b[0] == '"' && b[b.size() - 1] == '"')
         b = b.substr(1, b.size() - 2);
 
@@ -86,7 +83,6 @@ static bool extractBoundary(const std::string& contentType, std::string& outBoun
 
 static bool parseFilenameFromDisposition(const std::string& disp, std::string& outName)
 {
-    // Content-Disposition: form-data; name="file"; filename="testfile.test"
     size_t p = disp.find("filename=");
     if (p == std::string::npos)
         return false;
@@ -149,25 +145,21 @@ static bool extractMultipartFileSpan(const std::map<std::string, std::string>& h
     std::string delim = "--" + boundary;
     std::string nextDelim = "\r\n" + delim;
 
-    // Find first boundary
     size_t p0 = find_mem(b, blen, delim.c_str(), delim.size(), 0);
     if (p0 == (size_t)-1)
         return false;
 
-    // Move to end of boundary line
     size_t p = find_mem(b, blen, "\r\n", 2, p0);
     if (p == (size_t)-1)
         return false;
-    p += 2; // start of part headers
+    p += 2;
 
-    // Find end of part headers
     size_t hdrEnd = find_mem(b, blen, "\r\n\r\n", 4, p);
     if (hdrEnd == (size_t)-1)
         return false;
 
     std::string partHeaders(b + p, hdrEnd - p);
 
-    // Get Content-Disposition line
     std::string cdLine;
     {
         std::string low = partHeaders;
@@ -188,15 +180,12 @@ static bool extractMultipartFileSpan(const std::map<std::string, std::string>& h
     if (!cdLine.empty())
         parseFilenameFromDisposition(cdLine, fname);
 
-    // File bytes start after "\r\n\r\n"
     size_t dataStart = hdrEnd + 4;
-
-    // Find next boundary (preceded by \r\n)
     size_t p1 = find_mem(b, blen, nextDelim.c_str(), nextDelim.size(), dataStart);
     if (p1 == (size_t)-1)
         return false;
 
-    size_t dataEnd = p1; // bytes end right before "\r\n--boundary"
+    size_t dataEnd = p1;
     if (dataEnd < dataStart)
         return false;
 
@@ -206,7 +195,6 @@ static bool extractMultipartFileSpan(const std::map<std::string, std::string>& h
     return true;
 }
 
-/* ------------------------ Router methods ------------------------ */
 
 bool Router::is_method_allowed(const LocationConfig& location_config, HTTPMethod method) const
 {
@@ -307,13 +295,11 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
         }
     }
 
-    /* ---- choose filename: URL name OR multipart filename OR fallback ---- */
     std::string filename;
     size_t last_slash = fullpath.find_last_of('/');
     if (last_slash != std::string::npos && last_slash + 1 < fullpath.size())
         filename = fullpath.substr(last_slash + 1);
 
-    // If POST /uploads (no name in URL), use multipart filename
     if (filename.empty() && !mpFilename.empty())
         filename = mpFilename;
 
@@ -369,9 +355,6 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
         ssize_t n = write(fd, data + off, chunk);
         if (n < 0)
         {
-            if (errno == EINTR)
-                continue;
-
             close(fd);
             response.status_code = 500;
             response.reason_phrase = "Internal Server Error";
@@ -380,8 +363,6 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
             response.headers["Content-Type"] = "text/plain";
             return response;
         }
-        if (n == 0)
-            break;
         off += static_cast<size_t>(n);
     }
 

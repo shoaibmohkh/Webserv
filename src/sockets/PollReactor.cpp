@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   PollReactor.cpp                                    :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:39:48 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:39:48 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../include/sockets/PollReactor.hpp"
 #include "../../include/sockets/NetUtil.hpp"
 #include "../../include/RouterByteHandler.hpp"
@@ -19,11 +31,6 @@ static void setCloExec(int fd)
     int flags = fcntl(fd, F_GETFD);
     if (flags >= 0)
         fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
-}
-
-static bool is_retryable_errno(int e)
-{
-    return (e == EAGAIN || e == EWOULDBLOCK || e == EINTR);
 }
 
 static bool socket_has_fatal_error(int fd)
@@ -685,28 +692,17 @@ void PollReactor::pumpAsyncUploads()
             up.off += (size_t)n;
             continue;
         }
+        closeFd(up.fd);
+        up.fd = -1;
+        up.active = false;
+        up.raw.clear();
+        ch.setInFlight(false);
 
-        if (n < 0)
-        {
-            int err = errno;
-            
-            if (err == EAGAIN || err == EWOULDBLOCK || err == EINTR)
-            {
-                continue; // Try again next tick
-            }
+        ch.txBuffer() = minimalError(500, "Internal Server Error");
+        ch.setCloseOnDone(true);
+        ch.setPhase(PHASE_SEND);
+        setPollMask(ch.sockFd(), POLLIN | POLLOUT);
 
-            // Real failure
-            closeFd(up.fd);
-            up.fd = -1;
-            up.active = false;
-            up.raw.clear();
-            ch.setInFlight(false);
-
-            ch.txBuffer() = minimalError(500, "Internal Server Error");
-            ch.setCloseOnDone(true);
-            ch.setPhase(PHASE_SEND);
-            setPollMask(ch.sockFd(), POLLIN | POLLOUT);
-        }
     }
 }
 
@@ -770,11 +766,9 @@ void PollReactor::dispatchIfIdle(NetChannel& ch)
         }
     }
 
-    // Try async upload
     if (tryStartAsyncUpload(ch, msg))
         return;
 
-    // Normal sync request
     ch.setInFlight(true);
     ByteReply rep = _handler->handleBytes(ch.acceptFd(), msg);
     ch.setInFlight(false);
@@ -793,13 +787,8 @@ void PollReactor::onReadable(int fd)
 
     NetChannel& ch = it->second;
 
-     if (ch.inFlight() && ch.upload().active)
-    {
-
-        ch.setCloseOnDone(true);
-        setPollMask(fd, 0);
+    if (ch.upload().active)
         return;
-    }
     if (ch.cgi().active)
     {
         char tmp[1];
@@ -898,7 +887,7 @@ void PollReactor::onReadable(int fd)
                 }
 
                 std::string full;
-                full.swap(ch.rxBuffer()); // O(1)
+                full.swap(ch.rxBuffer());
 
                 ch.resetFraming();
                 ch.setPhase(PHASE_RECV_HEADERS);
@@ -919,11 +908,8 @@ void PollReactor::onReadable(int fd)
         return;
     }
 
-    const int e = errno;
-    if (is_retryable_errno(e))
-        return;
-
-    markDrop(fd);
+    if (socket_has_fatal_error(fd))
+        markDrop(fd);
 }
 
 void PollReactor::onWritable(int fd)
@@ -936,7 +922,43 @@ void PollReactor::onWritable(int fd)
 
     if (ch.phase() != PHASE_SEND)
         return;
+    NetChannel::FileSendSession& fs = ch.file();
+    if (fs.active)
+    {
+        if (fs.fd < 0)
+        {
+            fs.fd = open(fs.path.c_str(), O_RDONLY);
+            if (fs.fd < 0)
+            {
+                ch.txBuffer() = minimalError(500, "Internal Server Error");
+                ch.setCloseOnDone(true);
+                fs.active = false;
+            }
+        }
 
+        if (fs.active && fs.fd >= 0)
+        {
+            char buf[8192];
+            ssize_t nread = read(fs.fd, buf, sizeof(buf));
+
+            if (nread > 0)
+            {
+                ssize_t nsent = send(fd, buf, (size_t)nread, 0);
+                if (nsent < 0)
+                {
+                    if (socket_has_fatal_error(fd))
+                        markDrop(fd);
+                    return;
+                }
+                return;
+            }
+            closeFd(fs.fd);
+            fs.fd = -1;
+            fs.active = false;
+
+            ch.setCloseOnDone(true);
+        }
+    }
     if (!ch.txBuffer().empty())
     {
         const std::string& out = ch.txBuffer();
@@ -969,6 +991,8 @@ void PollReactor::onWritable(int fd)
         dispatchIfIdle(ch);
     }
 }
+
+
 
 
 void PollReactor::onCgiInWritable(int fd)
@@ -1015,12 +1039,8 @@ void PollReactor::onCgiInWritable(int fd)
 
     if (n < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-            return;
-
         cleanupCgiForClient(ch);
         ch.setInFlight(false);
-
         ch.txBuffer() = minimalError(502, "Bad Gateway");
         ch.setCloseOnDone(true);
         ch.setPhase(PHASE_SEND);
@@ -1133,9 +1153,6 @@ void PollReactor::onCgiOutReadable(int fd)
         return;
     }
 
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-        return;
-
     cleanupCgiForClient(ch);
     ch.setInFlight(false);
 
@@ -1150,7 +1167,6 @@ void PollReactor::onPollEvent(size_t idx)
     const int fd = _pollSet[idx].fd;
     const short re = _pollSet[idx].revents;
 
-    // CGI fds first
     if (_cgiOutToClient.find(fd) != _cgiOutToClient.end())
     {
         if (re & (POLLERR | POLLNVAL | POLLHUP | POLLIN))
@@ -1180,8 +1196,6 @@ void PollReactor::onPollEvent(size_t idx)
             onCgiInWritable(fd);
         return;
     }
-
-    // Normal sockets
     if (re & (POLLERR | POLLNVAL))
     {
         if (!isListener(fd))
@@ -1242,7 +1256,6 @@ void PollReactor::sweepTimeouts()
             continue;
         }
 
-        // CGI timeout
         if (ch.cgi().active)
         {
             if (cgiTimedOut(ch.cgi()))
@@ -1290,12 +1303,7 @@ void PollReactor::tickOnce()
 
     int ret = poll(&_pollSet[0], _pollSet.size(), 0);
     if (ret < 0)
-    {
-        if (errno == EINTR)
-            return;
-        ::perror("poll");
         return;
-    }
 
     if (ret > 0)
     {
@@ -1306,8 +1314,6 @@ void PollReactor::tickOnce()
             onPollEvent(i);
         }
     }
-
-    // finalize CGI possibly without more fd events
     for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
     {
         NetChannel& ch = it->second;

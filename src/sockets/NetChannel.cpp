@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   NetChannel.cpp                                     :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:39:28 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:39:28 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../../include/sockets/NetChannel.hpp"
 
 NetChannel::NetChannel()
@@ -17,7 +29,7 @@ NetChannel::NetChannel()
 , _closeOnDone(true)
 , _inFlight(false)
 , _cgi()
-, _upload()   // ✅ ADD THIS
+, _upload()
 {
     markSeen();
     markPhaseSince();
@@ -40,7 +52,7 @@ NetChannel::NetChannel(int sockFd, int acceptFd)
 , _closeOnDone(true)
 , _inFlight(false)
 , _cgi()
-, _upload()   // ✅ ADD THIS
+, _upload()
 {
     markSeen();
     markPhaseSince();
@@ -97,7 +109,7 @@ std::string NetChannel::popReadyMsg()
     if (_readyMsgs.empty())
         return r;
 
-    r.swap(_readyMsgs.front());   // O(1) instead of copying 1GB
+    r.swap(_readyMsgs.front());
     _readyMsgs.pop_front();
     return r;
 }
@@ -106,12 +118,12 @@ std::string NetChannel::popReadyMsg()
 void NetChannel::pushReadyMsg(std::string& msg)
 {
     _readyMsgs.push_back(std::string());
-    _readyMsgs.back().swap(msg);  // O(1)
+    _readyMsgs.back().swap(msg);
 }
 
 void NetChannel::pushReadyMsg(const std::string& msg)
 {
-    _readyMsgs.push_back(msg);    // fallback copy for const callers
+    _readyMsgs.push_back(msg);
 }
 
 bool NetChannel::closeOnDone() const { return _closeOnDone; }
@@ -122,3 +134,6 @@ void NetChannel::setInFlight(bool v) { _inFlight = v; markPhaseSince(); }
 
 CgiSession& NetChannel::cgi() { return _cgi; }
 NetChannel::UploadSession& NetChannel::upload() { return _upload; }
+
+NetChannel::FileSendSession& NetChannel::file() { return _file; }
+const NetChannel::FileSendSession& NetChannel::file() const { return _file; }

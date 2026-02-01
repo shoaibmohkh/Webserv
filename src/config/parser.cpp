@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   parser.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: eaqrabaw <eaqrabaw@student.42amman.com>    +#+  +:+       +#+        */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/14 12:03:36 by eaqrabaw          #+#    #+#             */
-/*   Updated: 2025/12/14 12:03:36 by eaqrabaw         ###   ########.fr       */
+/*   Created: 2026/02/01 16:36:11 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:36:11 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -68,35 +68,38 @@ Config    Parser::parse()
         {
             _pos++;
             ServerConfig serv = server_parse(_pos);
-if (_fatal)
-    return Config();
+            if (_fatal)
+                return Config();
 
-// 1) Validate listen exists and is valid
-if (serv.port <= 0 || serv.port > 65535)
-{
-    _fatal = true;
-    std::cerr << "Config Error: invalid listen port " << serv.port << std::endl;
-    return Config();
-}
+            if (serv.port <= 0 || serv.port > 65535)
+            {
+                _fatal = true;
+                std::cerr << "Config Error: invalid listen port " << serv.port << std::endl;
+                return Config();
+            }
+            for (size_t i = 0; i < conf.servers.size(); i++)
+            {
+                if (conf.servers[i].port == serv.port)
+                {
+                    if (conf.servers[i].server_name == serv.server_name)
+                    {
+                        int line = (serv.listen_line != -1) ? serv.listen_line : -1;
+                    
+                        _fatal = true;
+                        std::cerr << "Config Error: duplicate listen port "
+                                  << serv.port
+                                  << " with same server_name '" << serv.server_name << "'";
+                        if (line != -1)
+                            std::cerr << " at line " << line;
+                        std::cerr << std::endl;
+                    
+                        return Config();
+                    }
+                }
+            }
 
-// 2) Reject duplicate ports (THIS is what the evaluator wants)
-for (size_t i = 0; i < conf.servers.size(); i++)
-{
-    if (conf.servers[i].port == serv.port)
-    {
-        // if you added listen_line, use it; otherwise remove it
-        int line = (serv.listen_line != -1) ? serv.listen_line : -1;
 
-        _fatal = true;
-        std::cerr << "Config Error: duplicate listen port " << serv.port;
-        if (line != -1) std::cerr << " at line " << line;
-        std::cerr << std::endl;
-
-        return Config();
-    }
-}
-
-conf.servers.push_back(serv);
+            conf.servers.push_back(serv);
         }
         else
         {

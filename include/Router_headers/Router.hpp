@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Router.hpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/02/01 16:42:22 by sal-kawa          #+#    #+#             */
+/*   Updated: 2026/02/01 16:42:22 by sal-kawa         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #ifndef ROUTER_HPP
 #define ROUTER_HPP
 
@@ -38,7 +50,6 @@ public:
 
     HTTPResponse parse_cgi_response(const std::string& cgi_output) const;
 
-    // We expose these because RouterByteHandler needs them for async CGI routing
     const ServerConfig&    find_server_config(const HTTPRequest& request) const;
     const LocationConfig*  find_location_config(const std::string &uri, const ServerConfig& server_config) const;
     std::string            final_path(const ServerConfig& server_config, const LocationConfig& location_config, const std::string& uri) const;
