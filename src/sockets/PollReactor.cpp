@@ -13,7 +13,7 @@
 #include "../../include/sockets/PollReactor.hpp"
 #include "../../include/sockets/NetUtil.hpp"
 #include "../../include/RouterByteHandler.hpp"
-
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
@@ -417,23 +417,20 @@ void PollReactor::acceptBurst(int listenFd)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
-            ::perror("accept");
+            // Using strerror instead of perror
+            std::cerr << "accept: " << strerror(errno) << std::endl;
             break;
         }
-
         setCloExec(clientFd);
         if (makeNonBlocking(clientFd) < 0)
         {
             closeFd(clientFd);
             continue;
         }
-
         _channels.insert(std::make_pair(clientFd, NetChannel(clientFd, listenFd)));
-
         NetChannel& ch = _channels[clientFd];
         ch.setPhase(PHASE_RECV_HEADERS);
         ch.markSeen();
-
         addPollItem(clientFd, POLLIN);
     }
 }
@@ -500,18 +497,17 @@ std::string PollReactor::minimalError(int code, const char* reason)
 {
     std::string body = reason;
     body += "\n";
-
-    char line[128];
-    ::snprintf(line, sizeof(line), "HTTP/1.0 %d %s\r\n", code, reason);
-
-    char clen[128];
-    ::snprintf(clen, sizeof(clen), "Content-Length: %lu\r\n",
-               (unsigned long)body.size());
-
+    
+    std::ostringstream line;
+    line << "HTTP/1.0 " << code << " " << reason << "\r\n";
+    
+    std::ostringstream clen;
+    clen << "Content-Length: " << body.size() << "\r\n";
+    
     std::string r;
-    r += line;
+    r += line.str();
     r += "Content-Type: text/plain\r\n";
-    r += clen;
+    r += clen.str();
     r += "Connection: close\r\n";
     r += "\r\n";
     r += body;
@@ -646,47 +642,39 @@ bool PollReactor::tryStartAsyncUpload(NetChannel& ch, std::string& msg)
 void PollReactor::pumpAsyncUploads()
 {
     const size_t CHUNK = 1024 * 1024;
-
     for (std::map<int, NetChannel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
     {
         NetChannel& ch = it->second;
         NetChannel::UploadSession& up = ch.upload();
         if (!up.active)
             continue;
-
         size_t total = (up.dataEnd > up.dataStart) ? (up.dataEnd - up.dataStart) : 0;
         if (up.off >= total)
         {
-            // done - send 201 response
             closeFd(up.fd);
             up.fd = -1;
             up.active = false;
             up.raw.clear();
             ch.setInFlight(false);
-
             std::string body = "201 Created: File uploaded successfully.\n";
-            char head[256];
-            ::snprintf(head, sizeof(head),
-                       "HTTP/1.0 201 Created\r\n"
-                       "Connection: close\r\n"
-                       "Content-Length: %lu\r\n"
-                       "Content-Type: text/plain\r\n"
-                       "\r\n",
-                       (unsigned long)body.size());
-
-            ch.txBuffer() = std::string(head) + body;
+            
+            std::ostringstream head;
+            head << "HTTP/1.0 201 Created\r\n"
+                 << "Connection: close\r\n"
+                 << "Content-Length: " << body.size() << "\r\n"
+                 << "Content-Type: text/plain\r\n"
+                 << "\r\n";
+            
+            ch.txBuffer() = head.str() + body;
             ch.setCloseOnDone(true);
             ch.setPhase(PHASE_SEND);
             setPollMask(ch.sockFd(), POLLIN | POLLOUT);
             continue;
         }
-
         size_t left = total - up.off;
         size_t nwrite = (left > CHUNK) ? CHUNK : left;
-
         const char* data = up.raw.data() + up.dataStart + up.off;
         ssize_t n = write(up.fd, data, nwrite);
-
         if (n > 0)
         {
             up.off += (size_t)n;
@@ -697,12 +685,10 @@ void PollReactor::pumpAsyncUploads()
         up.active = false;
         up.raw.clear();
         ch.setInFlight(false);
-
         ch.txBuffer() = minimalError(500, "Internal Server Error");
         ch.setCloseOnDone(true);
         ch.setPhase(PHASE_SEND);
         setPollMask(ch.sockFd(), POLLIN | POLLOUT);
-
     }
 }
 

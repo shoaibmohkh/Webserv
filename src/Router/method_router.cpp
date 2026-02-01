@@ -380,7 +380,6 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
 {
     struct stat sb;
     HTTPResponse response;
-
     if (stat(fullpath.c_str(), &sb) != 0)
     {
         response.status_code = 404;
@@ -390,7 +389,6 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-
     if (S_ISDIR(sb.st_mode))
     {
         response.status_code = 403;
@@ -400,19 +398,42 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-
-    if (unlink(fullpath.c_str()) < 0)
+    int test_fd = open(fullpath.c_str(), O_WRONLY);
+    if (test_fd < 0)
     {
-        if (errno == EACCES || errno == EPERM)
-        {
-            response.status_code = 403;
-            response.reason_phrase = "Forbidden";
-            response.set_body("403 Forbidden: Permission denied.");
-            response.headers["Content-Length"] = to_string(response.body.size());
-            response.headers["Content-Type"] = "text/plain";
-            return response;
-        }
-
+        response.status_code = 403;
+        response.reason_phrase = "Forbidden";
+        response.set_body("403 Forbidden: Permission denied.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+    close(test_fd);
+    std::string parent_dir = fullpath;
+    size_t last_slash = parent_dir.find_last_of('/');
+    if (last_slash != std::string::npos)
+    {
+        parent_dir = parent_dir.substr(0, last_slash);
+        if (parent_dir.empty())
+            parent_dir = "/";
+    }
+    else
+    {
+        parent_dir = ".";
+    }
+    
+    if (access(parent_dir.c_str(), W_OK) != 0)
+    {
+        response.status_code = 403;
+        response.reason_phrase = "Forbidden";
+        response.set_body("403 Forbidden: Permission denied.");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+    int fd = open(fullpath.c_str(), O_WRONLY | O_TRUNC);
+    if (fd < 0)
+    {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
         response.set_body("500 Internal Server Error: Unable to delete the file.");
@@ -420,7 +441,8 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         response.headers["Content-Type"] = "text/plain";
         return response;
     }
-
+    close(fd);
+    
     response.status_code = 200;
     response.reason_phrase = "OK";
     response.set_body("200 OK: File deleted successfully.");

@@ -49,31 +49,62 @@ static void close_fds_from(int start_fd)
     DIR* d = opendir("/proc/self/fd");
     if (!d)
         return;
-
-    int dfd = dirfd(d);
-
+    std::vector<int> fds_to_close;
+    
     for (;;)
     {
         errno = 0;
         struct dirent* ent = readdir(d);
         if (!ent)
             break;
-
         const char* name = ent->d_name;
         if (name[0] < '0' || name[0] > '9')
             continue;
-
         int fd = std::atoi(name);
         if (fd < start_fd)
             continue;
-
-        if (fd == dfd)
-            continue;
-
-        close(fd);
+        fds_to_close.push_back(fd);
     }
-
+    
+    int dir_fd = -1;
+    DIR* d2 = opendir("/proc/self/fd");
+    if (d2)
+    {
+        for (;;)
+        {
+            errno = 0;
+            struct dirent* ent = readdir(d2);
+            if (!ent)
+                break;
+            const char* name = ent->d_name;
+            if (name[0] < '0' || name[0] > '9')
+                continue;
+            int fd = std::atoi(name);
+            bool found = false;
+            for (size_t i = 0; i < fds_to_close.size(); ++i)
+            {
+                if (fds_to_close[i] == fd)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && fd >= start_fd)
+            {
+                dir_fd = fd;
+                break;
+            }
+        }
+        closedir(d2);
+    }
+    
     closedir(d);
+    
+    for (size_t i = 0; i < fds_to_close.size(); ++i)
+    {
+        if (fds_to_close[i] != dir_fd)
+            close(fds_to_close[i]);
+    }
 }
 
 bool Router::is_cgi_request(const LocationConfig& location_config, const std::string& fullpath) const
