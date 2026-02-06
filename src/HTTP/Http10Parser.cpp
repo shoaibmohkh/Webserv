@@ -6,7 +6,7 @@
 /*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/01 16:36:45 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/02/01 16:36:47 by sal-kawa         ###   ########.fr       */
+/*   Updated: 2026/02/06 18:34:19 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -36,9 +36,10 @@ static std::string to_lower(std::string s)
 
 static HTTPMethod method_from_token(const std::string& m)
 {
-    if (m == "GET") return HTTP_GET;
-    if (m == "POST") return HTTP_POST;
+    if (m == "GET")    return HTTP_GET;
+    if (m == "POST")   return HTTP_POST;
     if (m == "DELETE") return HTTP_DELETE;
+    if (m == "HEAD")   return HTTP_HEAD;
     return HTTP_UNKNOWN;
 }
 

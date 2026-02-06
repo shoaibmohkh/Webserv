@@ -237,6 +237,18 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
 {
     HTTPResponse response;
 
+    if (!request.body.empty() &&
+        server_config.client_Max_Body_Size > 0 &&
+        request.body.size() > static_cast<size_t>(server_config.client_Max_Body_Size))
+    {
+        response.status_code = 413;
+        response.reason_phrase = "Payload Too Large";
+        response.set_body("413 Payload Too Large");
+        response.headers["Content-Length"] = to_string(response.body.size());
+        response.headers["Content-Type"] = "text/plain";
+        return response;
+    }
+
     if (location_config.uploadEnable == false)
     {
         response.status_code = 403;

@@ -60,11 +60,11 @@ public:
     std::string            to_string(size_t value) const;
 
     std::vector<std::string> build_cgi_environment(const HTTPRequest& request, const std::string& fullpath) const;
+    bool        is_method_allowed(const LocationConfig& location_config, HTTPMethod method) const;
 
 private:
     const Config& _config;
 
-    bool        is_method_allowed(const LocationConfig& location_config, HTTPMethod method) const;
     std::string get_mime_type(const std::string& filepath) const;
     std::string read_file_binary(const std::string& filepath) const;
 

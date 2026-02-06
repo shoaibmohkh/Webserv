@@ -6,7 +6,7 @@
 /*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/28 11:17:45 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/02/01 16:39:03 by sal-kawa         ###   ########.fr       */
+/*   Updated: 2026/02/06 18:31:24 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -182,6 +182,13 @@ CgiStartResult RouterByteHandler::tryStartCgi(int acceptFd, const std::string& r
         return out;
 
     out.isCgi = true;
+
+    if (!_router->is_method_allowed(*loc, req.method))
+    {
+        out.errResponseBytes = http10::makeError(405, "Method Not Allowed");
+        out.closeAfterWrite = true;
+        return out;
+    }
 
     Router::CgiSpawn sp;
     if (!_router->spawn_cgi(req, fullpath, *loc, sp))

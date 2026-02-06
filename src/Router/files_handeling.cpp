@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 #include "../../include/Router_headers/Router.hpp"
-
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -21,8 +20,9 @@ std::string Router::get_mime_type(const std::string& filepath) const
     std::string::size_type dot_pos = filepath.find_last_of('.');
     if (dot_pos == std::string::npos)
         return "application/octet-stream";
-
+    
     std::string extension = filepath.substr(dot_pos + 1);
+    
     if (extension == "html" || extension == "htm")
         return "text/html";
     if (extension == "css")
@@ -39,13 +39,14 @@ std::string Router::get_mime_type(const std::string& filepath) const
         return "text/plain";
     if (extension == "pdf")
         return "application/pdf";
+    
     return "application/octet-stream";
 }
 
 HTTPResponse Router::serve_static_file(const std::string& fullpath) const
 {
     HTTPResponse response;
-
+    
     int fd = open(fullpath.c_str(), O_RDONLY);
     if (fd < 0)
     {
@@ -56,16 +57,18 @@ HTTPResponse Router::serve_static_file(const std::string& fullpath) const
         response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
-
+    
     std::vector<char> body;
     char buffer[8192];
     ssize_t bytes_read;
-
+    
     while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0)
+    {
         body.insert(body.end(), buffer, buffer + bytes_read);
-
+    }
+    
     close(fd);
-
+    
     if (bytes_read < 0)
     {
         response.status_code = 500;
@@ -75,11 +78,12 @@ HTTPResponse Router::serve_static_file(const std::string& fullpath) const
         response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
-
+    
     response.status_code = 200;
     response.reason_phrase = "OK";
-    response.set_body(body);
+    response.body = body;
     response.headers["Content-Type"] = get_mime_type(fullpath);
     response.headers["Content-Length"] = to_string(response.body.size());
+    
     return response;
 }

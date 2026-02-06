@@ -11,11 +11,11 @@
 /* ************************************************************************** */
 
 #include "../../include/Router_headers/Router.hpp"
-
 #include <algorithm>
 #include <stdexcept>
 #include <cctype>
 #include <sys/stat.h>
+#include <cstring>
 
 Router::Router(const Config& config) : _config(config) {}
 Router::~Router() {}
@@ -72,9 +72,7 @@ static bool normalize_uri_path(const std::string& rawUri, std::string& out)
         if (ch == '/')
         {
             if (cur.empty() || cur == ".")
-            {
-                // skip
-            }
+            {}
             else if (cur == "..")
             {
                 if (parts.empty())
@@ -188,187 +186,163 @@ const ServerConfig &Router::find_server_config(const HTTPRequest& request) const
 
     return *candidates[0];
 }
-
 HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
 {
     HTTPResponse response;
+
+    bool isHead = (request.method == HTTP_HEAD);
+    HTTPMethod effectiveMethod = isHead ? HTTP_GET : request.method;
 
     if (_config.servers.empty())
     {
         response.status_code = 500;
         response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: No server configurations available.");
-        response.headers["Content-Length"] = to_string(response.body.size());
+        response.set_body("500 Internal Server Error");
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
 
-    const ServerConfig &server_config = find_server_config(request);
+    const ServerConfig& server = find_server_config(request);
 
-    std::string decodedUri;
-    if (!url_decode_path(request.uri, decodedUri))
+    std::string decoded;
+    if (!url_decode_path(request.uri, decoded))
     {
         response.status_code = 400;
         response.reason_phrase = "Bad Request";
         response.set_body("400 Bad Request");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 400, response);
     }
-
-    std::string normUri;
-    if (!normalize_uri_path(decodedUri, normUri))
+    std::string norm;
+    if (!normalize_uri_path(decoded, norm))
     {
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
         response.set_body("403 Forbidden");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 403, response);
     }
-
-    const LocationConfig* location_config = find_location_config(normUri, server_config);
-
-    if (!location_config)
+    const LocationConfig* loc = find_location_config(norm, server);
+    if (!loc)
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.set_body("404 Not Found");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 404, response);
     }
-
-    if (!is_method_allowed(*location_config, request.method))
+    if (loc->returnCode != 0)
+    {
+        response.status_code = loc->returnCode;
+        response.reason_phrase = "Moved Permanently";
+        response.headers["Location"] = loc->returnPath;
+        response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = "0";
+        return response;
+    }
+    if (!is_method_allowed(*loc, effectiveMethod))
     {
         response.status_code = 405;
         response.reason_phrase = "Method Not Allowed";
 
-        std::string allowed_methods;
-        if (location_config->allowMethods.empty())
-            allowed_methods = "GET, POST, DELETE";
-        else
+        std::string allow;
+        for (size_t i = 0; i < loc->allowMethods.size(); ++i)
         {
-            for (size_t i = 0; i < location_config->allowMethods.size(); ++i)
-            {
-                allowed_methods += location_config->allowMethods[i];
-                if (i + 1 < location_config->allowMethods.size())
-                    allowed_methods += ", ";
-            }
+            allow += loc->allowMethods[i];
+            if (i + 1 < loc->allowMethods.size())
+                allow += ", ";
         }
-        response.headers["Allow"] = allowed_methods;
 
+        response.headers["Allow"] = allow;
         response.set_body("405 Method Not Allowed");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
-    }
-
-    if (location_config->returnCode != 0)
-    {
-        response.status_code = location_config->returnCode;
-        response.reason_phrase = "Redirect";
-        response.headers["Location"] = location_config->returnPath;
-        response.set_body("Redirecting to " + location_config->returnPath);
         response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        return apply_error_page(server, 405, response);
     }
 
-    std::string fullpath = final_path(server_config, *location_config, normUri);
+    std::string fullpath = final_path(server, *loc, norm);
 
-    if (is_cgi_request(*location_config, fullpath))
-    {
-        HTTPResponse r;
-        r.status_code = 500;
-        r.reason_phrase = "Internal Server Error";
-        r.set_body("500 Internal Server Error: CGI must be handled asynchronously by RouterByteHandler/PollReactor.\n");
-        r.headers["Content-Type"] = "text/plain";
-        r.headers["Content-Length"] = to_string(r.body.size());
-        return r;
-    }
-    if (request.method == HTTP_POST)
-    {
-        response = handle_post_request(request, *location_config, server_config, fullpath);
-        return apply_error_page(server_config, response.status_code, response);
-    }
-
-    if (request.method == HTTP_DELETE)
-    {
-        const std::string& lp = location_config->path;
-        if (lp != "/" && (normUri.compare(0, lp.size(), lp) != 0 ||
-            !(normUri.size() == lp.size() || normUri[lp.size()] == '/')))
-        {
-            response.status_code = 403;
-            response.reason_phrase = "Forbidden";
-            response.set_body("403 Forbidden");
-            response.headers["Content-Length"] = to_string(response.body.size());
-            response.headers["Content-Type"] = "text/plain";
-            return apply_error_page(server_config, response.status_code, response);
-        }
-
-        response = handle_delete_request(fullpath);
-        return apply_error_page(server_config, response.status_code, response);
-    }
-    struct stat sb;
-    if (stat(fullpath.c_str(), &sb) != 0)
+    struct stat st;
+    if (stat(fullpath.c_str(), &st) != 0)
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.set_body("404 Not Found");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 404, response);
     }
 
-    if (S_ISDIR(sb.st_mode))
+    char realRoot[PATH_MAX];
+    char realFull[PATH_MAX];
+
+    if (!realpath(server.root.c_str(), realRoot) ||
+        !realpath(fullpath.c_str(), realFull) ||
+        std::strncmp(realFull, realRoot, std::strlen(realRoot)) != 0)
     {
-        if (location_config->autoindex == true)
-        {
-            response = generate_autoindex_response(fullpath);
-            return apply_error_page(server_config, response.status_code, response);
-        }
-
-        if (!server_config.index.empty())
-        {
-            std::string index_path = fullpath;
-            if (!index_path.empty() && index_path[index_path.size() - 1] != '/')
-                index_path += "/";
-            index_path += server_config.index;
-
-            struct stat sb_index;
-            if (stat(index_path.c_str(), &sb_index) == 0 && S_ISREG(sb_index.st_mode))
-            {
-                response = serve_static_file(index_path);
-                return apply_error_page(server_config, response.status_code, response);
-            }
-
-            response.status_code = 403;
-            response.reason_phrase = "Forbidden";
-            response.set_body("403 Forbidden");
-            response.headers["Content-Length"] = to_string(response.body.size());
-            response.headers["Content-Type"] = "text/plain";
-            return apply_error_page(server_config, response.status_code, response);
-        }
-
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
         response.set_body("403 Forbidden");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
-        return apply_error_page(server_config, response.status_code, response);
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 403, response);
+    }
+    if (access(fullpath.c_str(), R_OK) != 0)
+    {
+        response.status_code = 403;
+        response.reason_phrase = "Forbidden";
+        response.set_body("403 Forbidden");
+        response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return apply_error_page(server, 403, response);
+    }
+    if (effectiveMethod == HTTP_POST)
+    {
+        response = handle_post_request(request, *loc, server, fullpath);
+        return apply_error_page(server, response.status_code, response);
     }
 
-    if (S_ISREG(sb.st_mode))
+    if (effectiveMethod == HTTP_DELETE)
+    {
+        response = handle_delete_request(fullpath);
+        return apply_error_page(server, response.status_code, response);
+    }
+
+    if (S_ISDIR(st.st_mode))
+    {
+        if (loc->autoindex)
+            response = generate_autoindex_response(fullpath);
+        else
+        {
+            std::string index = fullpath + "/" + server.index;
+            if (stat(index.c_str(), &st) == 0)
+                response = serve_static_file(index);
+            else
+            {
+                response.status_code = 404;
+                response.reason_phrase = "Not Found";
+                response.set_body("404 Not Found");
+                response.headers["Content-Type"] = "text/plain";
+                response.headers["Content-Length"] = to_string(response.body.size());
+                return apply_error_page(server, 404, response);
+            }
+        }
+    }
+    else
     {
         response = serve_static_file(fullpath);
-        return apply_error_page(server_config, response.status_code, response);
     }
 
-    response.status_code = 501;
-    response.reason_phrase = "Not Implemented";
-    response.set_body("501 Not Implemented");
-    response.headers["Content-Type"] = "text/plain";
-    response.headers["Content-Length"] = to_string(response.body.size());
-    return apply_error_page(server_config, response.status_code, response);
+    if (isHead)
+    {
+        std::string len = response.headers["Content-Length"];
+        response.body.clear();
+        response.headers["Content-Length"] = len;
+    }
+
+    return response;
 }

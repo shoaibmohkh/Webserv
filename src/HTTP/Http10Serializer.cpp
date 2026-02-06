@@ -6,13 +6,12 @@
 /*   By: sal-kawa <sal-kawa@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/01 16:36:49 by sal-kawa          #+#    #+#             */
-/*   Updated: 2026/02/01 16:36:50 by sal-kawa         ###   ########.fr       */
+/*   Updated: 2026/02/06 20:10:49 by sal-kawa         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 
 #include "../../include/HTTP/http10/Http10Serializer.hpp"
-
 #include <sstream>
 #include <map>
 
@@ -53,9 +52,11 @@ namespace http10
     std::string serializeClose(const HTTPResponse& res)
     {
         std::map<std::string, std::string> headers = res.headers;
-
         headers["Connection"] = "close";
-        headers["Content-Length"] = to_dec(res.body.size());
+        
+        if (headers.find("Content-Length") == headers.end())
+            headers["Content-Length"] = to_dec(res.body.size());
+        
         if (headers.find("Content-Type") == headers.end())
             headers["Content-Type"] = "text/plain";
 
@@ -89,7 +90,6 @@ namespace http10
         std::string out = oss.str();
         if (!res.body.empty())
             out.append(&res.body[0], res.body.size());
-
         return out;
     }
 }
