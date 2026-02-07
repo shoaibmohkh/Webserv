@@ -136,21 +136,19 @@ Or just open your browser and go to `http://localhost:8080/`
 
 ## Resources
 
-<!-- Add your resources here -->
-
-- 
-- 
-- 
+- [RFC 1945 – HTTP/1.0](https://datatracker.ietf.org/doc/html/rfc1945)
+- [NGINX Documentation](https://nginx.org/)
+- [RFC 3875 – The Common Gateway Interface (CGI)](https://www.ietf.org/rfc/rfc3875)
+- [Linux Socket Programming in C/C++](https://www.linuxhowtos.org/C_C++/socket.htm)
+- [I/O Multiplexing: select and poll](https://notes.shichao.io/unp/ch6/)
 
 ---
 
 ## AI Usage
 
-<!-- Describe how you used AI in this project -->
-
-- 
-- 
-- 
+- Guided us on how to get started and what concepts we needed to learn
+- Helped us build a roadmap for the project
+- Generated additional test cases to improve our testing coverage
 
 ---
 
@@ -158,20 +156,84 @@ Or just open your browser and go to `http://localhost:8080/`
 
 ```
 webserv/
-├── include/
-│   ├── config_headers/   -> Config, Parser, Tokenizer
-│   ├── HTTP/             -> HttpRequest, HttpResponse, Http10Parser, Http10Serializer
-│   ├── Router_headers/   -> Router
-│   └── sockets/          -> PollReactor, NetChannel, ListenPort
-├── src/
-│   ├── config/           -> config parsing stuff
-│   ├── HTTP/             -> HTTP parsing and serializing
-│   ├── Router/           -> request routing, CGI, file handling, autoindex
-│   └── sockets/          -> poll loop, connections
-├── test_root/            -> test files
-├── www/                  -> default web root
 ├── Makefile
-└── webserv.conf
+├── README.md
+├── include/
+│   ├── RouterByteHandler.hpp
+│   ├── config_headers/
+│   │   ├── Config.hpp
+│   │   ├── Parser.hpp
+│   │   └── Tokenizer.hpp
+│   ├── HTTP/
+│   │   ├── HttpRequest.hpp
+│   │   ├── HttpResponse.hpp
+│   │   └── http10/
+│   │       ├── Http10Parser.hpp
+│   │       └── Http10Serializer.hpp
+│   ├── Router_headers/
+│   │   └── Router.hpp
+│   └── sockets/
+│       ├── IByteHandler.hpp
+│       ├── ICgiHandler.hpp
+│       ├── ListenPort.hpp
+│       ├── NetChannel.hpp
+│       ├── NetUtil.hpp
+│       └── PollReactor.hpp
+├── src/
+│   ├── main.cpp
+│   ├── config/
+│   │   ├── Tokenizer.cpp
+│   │   ├── location_parser.cpp
+│   │   ├── parser.cpp
+│   │   └── server_parser.cpp
+│   ├── HTTP/
+│   │   ├── Http10Parser.cpp
+│   │   └── Http10Serializer.cpp
+│   ├── Router/
+│   │   ├── Router.cpp
+│   │   ├── RouterByteHandler.cpp
+│   │   ├── autoindex.cpp
+│   │   ├── cgi_router.cpp
+│   │   ├── error_page.cpp
+│   │   ├── files_handeling.cpp
+│   │   ├── method_router.cpp
+│   │   └── router_utils.cpp
+│   └── sockets/
+│       ├── ListenPort.cpp
+│       ├── NetChannel.cpp
+│       ├── NetUtil.cpp
+│       └── PollReactor.cpp
+└── test_root/
+    ├── index.html
+    ├── router_test.conf
+    ├── autoindex_dir/
+    │   └── file1.txt
+    ├── cgi/
+    │   ├── a.py
+    │   ├── error.py
+    │   ├── hello.txt
+    │   ├── loop.py
+    │   ├── q.py
+    │   └── test.py
+    ├── delete_zone/
+    ├── errors/
+    │   ├── 403.html
+    │   ├── 404.html
+    │   └── 500.html
+    ├── files/
+    │   ├── a.txt
+    │   ├── index.html
+    │   ├── todel.txt
+    │   └── assets/
+    │       └── style.css
+    ├── listing_dir/
+    │   ├── file1.txt
+    │   └── file2.txt
+    ├── private_dir/
+    │   └── private.txt
+    ├── uploads/
+    └── with_index_dir/
+        └── index2.html
 ```
 
 ---

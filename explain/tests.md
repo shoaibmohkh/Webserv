@@ -2,6 +2,7 @@
 
 =========================================
 2-basic cases:
+
 1.1) curl -i --http1.0 http://127.0.0.1:8080/
 ok 200
 GET root index 
@@ -51,6 +52,7 @@ curl -i --http1.0 -F "file=@2mb.bin" http://127.0.0.1:9090/
 
 =========================================
 3-CGI tests:
+
 1.1)curl -i --http1.0 http://127.0.0.1:8080/cgi/test.py
 run the python script, wait 10s and print cgi worked
 
@@ -70,6 +72,7 @@ html error page
 
 ==========================================
 4-browser checkes:
+
 1.1)http://127.0.0.1:8080/
 index.html that in the root
 
@@ -106,4 +109,12 @@ open it without no errors
 
 
 =============================================
-6-siege
+6-siege:
+
+1.1)siege -b -c 25 -d 1 -r 200 http://127.0.0.1:8080/
+-b → benchmark mode (no think time, max pressure)
+-c 25 → 25 concurrent clients (reasonable, fair)
+-d 1 → up to 1s delay before reconnect
+-r 200 → each client makes 200 requests (≈ 5,000 total)
+
+1.2)siege -b -c 20 -d 1 -r 1000 http://127.0.0.1:8080/
