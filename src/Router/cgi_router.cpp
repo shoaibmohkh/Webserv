@@ -177,6 +177,17 @@ std::vector<std::string> Router::build_cgi_environment(const HTTPRequest& reques
 HTTPResponse Router::parse_cgi_response(const std::string& cgi_output) const
 {
     HTTPResponse response;
+
+    if (cgi_output.empty())
+    {
+        response.status_code = 500;
+        response.reason_phrase = "Internal Server Error";
+        response.set_body("500 Internal Server Error: CGI execution failed.");
+        response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
+        return response;
+    }
+
     response.status_code = 200;
     response.reason_phrase = "OK";
 
@@ -247,7 +258,8 @@ HTTPResponse Router::parse_cgi_response(const std::string& cgi_output) const
         headers.erase("Status");
     }
 
-    for (std::map<std::string, std::string>::iterator it = headers.begin(); it != headers.end(); ++it)
+    for (std::map<std::string, std::string>::iterator it = headers.begin();
+         it != headers.end(); ++it)
         response.headers[it->first] = it->second;
 
     if (response.headers.find("Content-Type") == response.headers.end())
@@ -257,6 +269,7 @@ HTTPResponse Router::parse_cgi_response(const std::string& cgi_output) const
     response.headers["Content-Length"] = to_string(response.body.size());
     return response;
 }
+
 
 bool Router::spawn_cgi(const HTTPRequest& request,
                        const std::string& fullpath,

@@ -300,6 +300,18 @@ HTTPResponse Router::handle_route_Request(const HTTPRequest& request) const
         response.headers["Content-Length"] = to_string(response.body.size());
         return apply_error_page(server, 403, response);
     }
+    if (!loc->cgiExtensions.empty())
+    {
+        if (!is_cgi_request(*loc, fullpath))
+        {
+            response.status_code = 403;
+            response.reason_phrase = "Forbidden";
+            response.set_body("403 Forbidden");
+            response.headers["Content-Type"] = "text/plain";
+            response.headers["Content-Length"] = to_string(response.body.size());
+            return apply_error_page(server, 403, response);
+        }
+    }
     if (effectiveMethod == HTTP_POST)
     {
         response = handle_post_request(request, *loc, server, fullpath);

@@ -390,15 +390,16 @@ HTTPResponse Router::handle_post_request(const HTTPRequest& request,
 
 HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
 {
-    struct stat sb;
     HTTPResponse response;
+    struct stat sb;
+
     if (stat(fullpath.c_str(), &sb) != 0)
     {
         response.status_code = 404;
         response.reason_phrase = "Not Found";
         response.set_body("404 Not Found: File does not exist.");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
     if (S_ISDIR(sb.st_mode))
@@ -406,59 +407,32 @@ HTTPResponse Router::handle_delete_request(const std::string& fullpath) const
         response.status_code = 403;
         response.reason_phrase = "Forbidden";
         response.set_body("403 Forbidden: Cannot delete a directory.");
-        response.headers["Content-Length"] = to_string(response.body.size());
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
-    int test_fd = open(fullpath.c_str(), O_WRONLY);
-    if (test_fd < 0)
+    if (unlink(fullpath.c_str()) != 0)
     {
-        response.status_code = 403;
-        response.reason_phrase = "Forbidden";
-        response.set_body("403 Forbidden: Permission denied.");
-        response.headers["Content-Length"] = to_string(response.body.size());
+        if (errno == EACCES || errno == EPERM)
+        {
+            response.status_code = 403;
+            response.reason_phrase = "Forbidden";
+            response.set_body("403 Forbidden: Permission denied.");
+        }
+        else
+        {
+            response.status_code = 500;
+            response.reason_phrase = "Internal Server Error";
+            response.set_body("500 Internal Server Error: Unable to delete file.");
+        }
+
         response.headers["Content-Type"] = "text/plain";
+        response.headers["Content-Length"] = to_string(response.body.size());
         return response;
     }
-    close(test_fd);
-    std::string parent_dir = fullpath;
-    size_t last_slash = parent_dir.find_last_of('/');
-    if (last_slash != std::string::npos)
-    {
-        parent_dir = parent_dir.substr(0, last_slash);
-        if (parent_dir.empty())
-            parent_dir = "/";
-    }
-    else
-    {
-        parent_dir = ".";
-    }
-    
-    if (access(parent_dir.c_str(), W_OK) != 0)
-    {
-        response.status_code = 403;
-        response.reason_phrase = "Forbidden";
-        response.set_body("403 Forbidden: Permission denied.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
-    }
-    int fd = open(fullpath.c_str(), O_WRONLY | O_TRUNC);
-    if (fd < 0)
-    {
-        response.status_code = 500;
-        response.reason_phrase = "Internal Server Error";
-        response.set_body("500 Internal Server Error: Unable to delete the file.");
-        response.headers["Content-Length"] = to_string(response.body.size());
-        response.headers["Content-Type"] = "text/plain";
-        return response;
-    }
-    close(fd);
-    
-    response.status_code = 200;
-    response.reason_phrase = "OK";
-    response.set_body("200 OK: File deleted successfully.");
-    response.headers["Content-Length"] = to_string(response.body.size());
-    response.headers["Content-Type"] = "text/plain";
+    response.status_code = 204;
+    response.reason_phrase = "No Content";
+    response.body.clear();
+    response.headers["Content-Length"] = "0";
     return response;
 }
