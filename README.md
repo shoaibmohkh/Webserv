@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by sal-kawa, ikhalil, eaqrabaw.*
+*This project has been created as part of the 42 curriculum by Shoaib Al-kawaldeh[sal-kawa], Ismail Khalil[ikhalil], Eayad Aqrabaw[eaqrabaw].*
 
 # Webserv
 
